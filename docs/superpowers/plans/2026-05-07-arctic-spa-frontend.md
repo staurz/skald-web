@@ -314,19 +314,15 @@ describe('hashPassword', () => {
   it('matches the expected algorithm shape (SHA-1 over base64-decoded salt + UTF-16-LE password, base64 with trailing char dropped)', () => {
     // Salt = base64('saltsalt') = 'c2FsdHNhbHQ='. Decoded: 8 bytes 'saltsalt'.
     // Password 'a' as UTF-16-LE = bytes [0x61, 0x00].
-    // Concatenated = 'saltsalt' + [0x61, 0x00] = 10 bytes.
-    // SHA-1 of those 10 bytes (hex): a957a9c4cb39c0e8cf2eaf6a55ee9586d9af9ab0
-    // Base64 of that digest = 'qVepxMs5wOjPLq9qVe6VhtmvmrA='
-    // After dropping last char: 'qVepxMs5wOjPLq9qVe6VhtmvmrA'
+    // SHA-1(saltsalt || [0x61,0x00]) base64 with last char dropped:
     const result = hashPassword('a', 'c2FsdHNhbHQ=');
-    expect(result).toBe('qVepxMs5wOjPLq9qVe6VhtmvmrA');
+    expect(result).toBe('aNLe4t1WDvM6yQwwPf539C6soQ4');
   });
 
   it('handles empty password', () => {
-    // SHA-1 of just the decoded salt 'saltsalt' (8 bytes): 67051d7e7e2cf6776a4f7e98c7d5d5c97aafe3a4
-    // Base64: 'ZwUdfn4s9ndqT36Yx9XVyXqv46Q=' → drop last: 'ZwUdfn4s9ndqT36Yx9XVyXqv46Q'
+    // SHA-1(saltsalt) base64 with last char dropped:
     const result = hashPassword('', 'c2FsdHNhbHQ=');
-    expect(result).toBe('ZwUdfn4s9ndqT36Yx9XVyXqv46Q');
+    expect(result).toBe('LCq6zkvYuxn2cRPaFG27jMz4SRU');
   });
 });
 ```
@@ -366,7 +362,7 @@ export function hashPassword(password: string, saltBase64: string): string {
 Run: `npm run test`
 Expected: 2 tests passing.
 
-If a test value disagrees: recompute manually with `node -e "console.log(require('crypto').createHash('sha1').update(Buffer.concat([Buffer.from('c2FsdHNhbHQ=', 'base64'), Buffer.from('a', 'utf16le')])).digest('base64'))"` and update the expected string. The algorithm is what matters, not the synthetic vector.
+If a test value disagrees: recompute manually with `node -e "console.log(require('crypto').createHash('sha1').update(Buffer.concat([Buffer.from('c2FsdHNhbHQ=', 'base64'), Buffer.from('a', 'utf16le')])).digest('base64').slice(0,-1))"` (these vectors verified by execution before drafting the plan).
 
 - [ ] **Step 5: Commit**
 

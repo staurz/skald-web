@@ -1,0 +1,28 @@
+node_modules/
+build/
+.svelte-kit/
+spike/
+*.db
+*.db-journal
+data/
+.env
+.env.local
+.env.*.local
+*.log
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# WSL/Windows shared shell config (mounted, not project files)
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
