@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-05-07-arctic-spa-frontend-design.md`
 
+**Design system:** `design/tokens.md`. UI tasks (17-20, 23, 26) implement against this rather than inventing styling. `design/dashboard-preview.html` is the live mockup (open in any browser). `design/states.html` shows loading / stale / error / no-Spa-Boy variants — components must handle each state gracefully. `design/icon.svg` is the source-of-truth PWA icon, rasterised to PNGs at build time (Task 19).
+
 ---
 
 ## Setup notes (one-time prep before Task 1)
@@ -1792,9 +1794,26 @@ git commit -m "feat: dashboard page assembly"
 }
 ```
 
-- [ ] **Step 2: Add icons**
+- [ ] **Step 2: Generate PNG icons from the design SVG**
 
-Generate two PNGs (any spa-themed image will do — drop in placeholders for now). Save as `static/icon-192.png` and `static/icon-512.png`.
+The design source is `design/icon.svg`. Generate the two PNG sizes via `sharp`:
+
+```bash
+npm install --save-dev --save-exact sharp
+node -e "require('sharp')('design/icon.svg').resize(192, 192).png().toFile('static/icon-192.png')"
+node -e "require('sharp')('design/icon.svg').resize(512, 512).png().toFile('static/icon-512.png')"
+```
+
+Also copy the SVG itself for browsers that support it: `cp design/icon.svg static/icon.svg`.
+
+Update the manifest icons array to:
+```json
+"icons": [
+  { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+  { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+  { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+]
+```
 
 - [ ] **Step 3: Wire into app.html**
 
