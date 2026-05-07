@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Skålda — Arctic Spa</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1320">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,200..900,30..100;1,9..144,200..900,30..100&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+
+  :root {
+    /* ---- Atmospheric base ---- */
+    --ink:        #0a1320;
+    --ink-2:      #122035;
+    --ink-3:      #1a2b44;
+    --ink-4:      #243a58;
+
+    /* ---- Warm cream foreground (dark-mode default) ---- */
+    --paper:      #f3ede0;
+    --paper-soft: rgba(243, 237, 224, 0.72);
+    --paper-mute: rgba(243, 237, 224, 0.46);
+    --paper-faint:rgba(243, 237, 224, 0.18);
+    --paper-line: rgba(243, 237, 224, 0.08);
+
+    /* ---- Heat / state palette ---- */
+    --copper:     #cc7c3a;            /* heating active */
+    --copper-dim: rgba(204, 124, 58, 0.5);
+    --copper-aura:rgba(204, 124, 58, 0.18);
+    --amber:      #d9a460;            /* highlight */
+    --moss:       #8aa68d;             /* in-range / good */
+    --rust:       #c25b48;             /* error / out-of-range */
+    --pearl:      #d4c8b4;             /* subtle highlight on dark cards */
+
+    /* ---- Type ---- */
+    --display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+    --mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+    /* ---- Radii ---- */
+    --r-sm: 14px;
+    --r-md: 22px;
+    --r-lg: 30px;
+
+    /* ---- Shadows ---- */
+    --shadow-1: 0 2px 12px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 18px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 14, 'SOFT' 50, 'wght' 400;
+    font-feature-settings: 'lnum', 'ss01';
+    overflow-x: hidden;
+    min-height: 100%;
+    position: relative;
+  }
+
+  /* The atmosphere — cold above, warm-glow water below.
+     The whole field drifts very slowly, suggesting the slow respiration of heat. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: -10%;
+    background:
+      radial-gradient(ellipse 90% 70% at 50% 115%, var(--copper-aura), transparent 60%),
+      radial-gradient(ellipse 100% 80% at 50% 100%, rgba(217, 164, 96, 0.08), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 70% -10%, rgba(36, 58, 88, 0.5), transparent 60%),
+      radial-gradient(ellipse 50% 30% at 20% 0%, rgba(36, 58, 88, 0.4), transparent 60%);
+    z-index: -2;
+    animation: drift 38s ease-in-out infinite alternate;
+  }
+
+  /* Film-grain texture: gives the dark surfaces a tactile warmth, not slick plastic. */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(rgba(243, 237, 224, 0.022) 1px, transparent 1px),
+      radial-gradient(rgba(243, 237, 224, 0.012) 1px, transparent 1px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 1px 2px;
+    pointer-events: none;
+    z-index: -1;
+    mix-blend-mode: overlay;
+  }
+
+  @keyframes drift {
+    0%   { transform: translate( 0%,  2%); }
+    100% { transform: translate(-2%, -1%); }
+  }
+
+  /* ============== APP SHELL ============== */
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 32px 22px 96px;
+    position: relative;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 56px;
+  }
+
+  .mark {
+    font-family: var(--display);
+    font-style: italic;
+    font-variation-settings: 'opsz' 72, 'SOFT' 80, 'wght' 350;
+    font-size: 1.7rem;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--paper);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+  }
+  .mark .mark-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--copper);
+    box-shadow: 0 0 18px var(--copper-dim);
+    transform: translateY(-0.15em);
+  }
+
+  .nav {
+    display: flex;
+    gap: 22px;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+  }
+  .nav a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.4s ease;
+    position: relative;
+  }
+  .nav a.active { color: var(--paper); }
+  .nav a.active::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -8px;
+    height: 1px;
+    background: var(--copper);
+  }
+  .nav a:hover { color: var(--paper); }
+
+  /* ============== HERO TEMPERATURE ============== */
+  .hero { margin-bottom: 56px; position: relative; }
+
+  .hero-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .hero-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--paper-faint), transparent);
+  }
+  .hero-label .timestamp {
+    font-family: var(--mono);
+    color: var(--paper-faint);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: none;
+  }
+
+  .hero-number {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 144, 'SOFT' 100, 'wght' 240;
+    font-size: clamp(8rem, 32vw, 16rem);
+    line-height: 0.82;
+    letter-spacing: -0.045em;
+    color: var(--paper);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.05em;
+  }
+  .hero-unit {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 60, 'wght' 350;
+    font-size: 0.22em;
+    color: var(--paper-mute);
+    margin-top: 0.45em;
+    letter-spacing: 0;
+  }
+  .hero-celsius {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 18, 'wght' 400;
+    color: var(--paper-soft);
+    font-size: 1.05rem;
+    margin-top: 14px;
+    letter-spacing: 0.04em;
+  }
+
+  .hero-meta {
+    margin-top: 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px 28px;
+    align-items: center;
+  }
+  .hero-target {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.92rem;
+    color: var(--paper-soft);
+  }
+  .hero-target-num {
+    font-variation-settings: 'opsz' 18, 'wght' 500;
+    color: var(--paper);
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+  }
+  .hero-target-label {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+  }
+
+  .hero-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 16px 7px 14px;
+    border-radius: 999px;
+    background: rgba(204, 124, 58, 0.12);
+    border: 1px solid rgba(204, 124, 58, 0.32);
+    color: var(--copper);
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .hero-status::before {
+    content: '';
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--copper);
+    box-shadow: 0 0 14px var(--copper);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.45; transform: scale(0.85); }
+  }
+
+  /* ============== CARDS ("polished stones") ============== */
+  .card {
+    background: linear-gradient(180deg, rgba(26, 43, 68, 0.62), rgba(18, 32, 53, 0.86));
+    backdrop-filter: blur(20px) saturate(110%);
+    -webkit-backdrop-filter: blur(20px) saturate(110%);
+    border: 1px solid var(--paper-line);
+    border-radius: var(--r-lg);
+    padding: 28px;
+    box-shadow: var(--shadow-1);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(160deg, rgba(243, 237, 224, 0.04), transparent 40%);
+    pointer-events: none;
+  }
+  .card + .card { margin-top: 18px; }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+    margin-bottom: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-label .stamp {
+    font-family: var(--mono);
+    color: var(--paper-faint);
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: none;
+  }
+
+  /* ============== ACCESSORIES ============== */
+  .accessory-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .acc {
+    aspect-ratio: 1;
+    border-radius: var(--r-md);
+    background: rgba(243, 237, 224, 0.04);
+    border: 1px solid rgba(243, 237, 224, 0.06);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 16px 14px 14px;
+    transition: all 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .acc.on {
+    background: linear-gradient(135deg, rgba(204, 124, 58, 0.16), rgba(204, 124, 58, 0.04));
+    border-color: rgba(204, 124, 58, 0.32);
+  }
+  .acc.on::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 110%, rgba(204, 124, 58, 0.28), transparent 65%);
+    pointer-events: none;
+  }
+  .acc.on.lights {
+    background: linear-gradient(135deg, rgba(217, 164, 96, 0.18), rgba(217, 164, 96, 0.05));
+    border-color: rgba(217, 164, 96, 0.35);
+  }
+  .acc.on.lights::before {
+    background: radial-gradient(circle at 50% 110%, rgba(217, 164, 96, 0.3), transparent 65%);
+  }
+
+  .acc svg {
+    width: 24px; height: 24px;
+    stroke: var(--paper-mute);
+    fill: none;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    position: relative; z-index: 1;
+  }
+  .acc.on svg { stroke: var(--copper); }
+  .acc.on.lights svg { stroke: var(--amber); }
+
+  .acc-foot {
+    position: relative; z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .acc-name {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+  }
+  .acc.on .acc-name { color: var(--paper); }
+  .acc-state {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 14, 'wght' 500;
+    font-size: 0.78rem;
+    color: var(--paper-faint);
+    letter-spacing: 0.02em;
+  }
+  .acc.on .acc-state { color: var(--paper-soft); }
+
+  /* ============== CHEMISTRY ============== */
+  .chem-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .chem {
+    text-align: left;
+    padding: 4px 0;
+  }
+  .chem-name {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+    margin-bottom: 12px;
+  }
+  .chem-value {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 96, 'SOFT' 60, 'wght' 280;
+    font-size: 2.5rem;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    color: var(--paper);
+    margin-bottom: 6px;
+  }
+  .chem-value.good { color: var(--moss); }
+  .chem-value.warn { color: var(--amber); }
+  .chem-value.bad  { color: var(--rust); }
+
+  .chem-range {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--paper-faint);
+    letter-spacing: 0.06em;
+  }
+  .chem-unit {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 18, 'wght' 400;
+    font-size: 0.48em;
+    color: var(--paper-mute);
+    margin-left: 0.15em;
+    letter-spacing: 0;
+  }
+
+  /* ============== SPARKLINE ============== */
+  .spark {
+    margin-top: 6px;
+  }
+  .spark-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .spark-title {
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 24, 'wght' 400;
+    font-size: 1rem;
+    color: var(--paper);
+  }
+  .spark-meta {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--paper-mute);
+    letter-spacing: 0.1em;
+  }
+  .spark svg {
+    width: 100%; height: 88px;
+    overflow: visible;
+  }
+  .spark-line {
+    fill: none;
+    stroke: var(--copper);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 8px var(--copper-dim));
+  }
+  .spark-fill {
+    fill: url(#sparkGradient);
+    opacity: 0.85;
+  }
+  .spark-axis {
+    stroke: var(--paper-faint);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+  }
+  .spark-axis-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    fill: var(--paper-faint);
+    letter-spacing: 0.08em;
+  }
+  .spark-current {
+    fill: var(--copper);
+    filter: drop-shadow(0 0 6px var(--copper-dim));
+  }
+
+  /* ============== FOOTER STAMP ============== */
+  .stamp {
+    margin-top: 56px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--paper-faint);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .stamp::before, .stamp::after {
+    content: '·';
+    margin: 0 12px;
+  }
+
+  /* ============================================
+     DESKTOP — dedicated layout
+     A wider control-panel feel, but keeping the
+     same atmosphere and editorial typography.
+     ============================================ */
+  @media (min-width: 1024px) {
+    .app {
+      max-width: 1320px;
+      padding: 64px 64px 96px;
+    }
+    .topbar { margin-bottom: 96px; }
+    .mark { font-size: 2.1rem; }
+    .nav { gap: 36px; font-size: 0.74rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.55fr 1fr;
+      gap: 64px;
+      align-items: start;
+    }
+
+    .col-main { display: flex; flex-direction: column; gap: 48px; }
+    .col-side { display: flex; flex-direction: column; gap: 22px; }
+
+    .hero { margin-bottom: 0; }
+    .hero-number { font-size: clamp(10rem, 16vw, 18rem); }
+    .hero-celsius { font-size: 1.2rem; }
+
+    .accessory-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .card { padding: 32px; }
+    .card + .card { margin-top: 22px; }
+
+    /* On desktop, the hero gets extra real estate to breathe */
+    .col-main .hero-meta { margin-top: 28px; }
+    .col-main .accessories { padding: 36px; }
+  }
+
+  /* Dark/light handling note: the design is dark-mode-default.
+     Light theme would invert ink/paper but keep copper/amber accents.
+     Implementation keeps `dark` class on <html> and toggles in app. */
+</style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <a class="mark" href="#">
+        Skålda<span class="mark-dot"></span>
+      </a>
+      <nav class="nav">
+        <a href="#" class="active">Now</a>
+        <a href="#">History</a>
+        <a href="#">Alerts</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <!-- ========= COL MAIN ========= -->
+      <div class="col-main">
+        <!-- HERO TEMPERATURE -->
+        <section class="hero">
+          <div class="hero-label">
+            Water temperature
+            <span class="timestamp">updated 12 s ago</span>
+          </div>
+          <div class="hero-number">
+            <span>102</span><span class="hero-unit">°F</span>
+          </div>
+          <div class="hero-celsius">38.9 °C</div>
+          <div class="hero-meta">
+            <span class="hero-target">
+              <span class="hero-target-label">Target</span>
+              <span class="hero-target-num">104°F</span>
+            </span>
+            <span class="hero-status">Heating</span>
+          </div>
+        </section>
+
+        <!-- ACCESSORIES -->
+        <section class="card accessories">
+          <div class="card-label">
+            Accessories
+            <span class="stamp">5 + 1 + 1</span>
+          </div>
+          <div class="accessory-grid">
+            <div class="acc on">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 6 v-2.5 M12 18 v2.5 M6 12 h-2.5 M18 12 h2.5"/></svg>
+              <div class="acc-foot">
+                <div class="acc-name">Pump 1</div>
+                <div class="acc-state">High</div>
+              </div>
+            </div>
+            <div class="acc">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 6 v-2.5 M12 18 v2.5 M6 12 h-2.5 M18 12 h2.5"/></svg>
+              <div class="acc-foot">
+                <div class="acc-name">Pump 2</div>
+                <div class="acc-state">Off</div>
+              </div>
+            </div>
+            <div class="acc on">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M12 6 v-2.5 M12 18 v2.5 M6 12 h-2.5 M18 12 h2.5"/></svg>
+              <div class="acc-foot">
+                <div class="acc-name">Pump 3</div>
+                <div class="acc-state">Low</div>
+              </div>
+            </div>
+            <div class="acc">
+              <svg viewBox="0 0 24 24"><path d="M4 14 Q8 8 12 14 T20 14"/><path d="M4 18 Q8 12 12 18 T20 18"/></svg>
+              <div class="acc-foot">
+                <div class="acc-name">Blower</div>
+                <div class="acc-state">Off</div>
+              </div>
+            </div>
+            <div class="acc on lights">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 5 v-2 M12 21 v-2 M5 12 h-2 M21 12 h-2 M7 7 l-1.5 -1.5 M18.5 18.5 l-1.5 -1.5 M7 17 l-1.5 1.5 M18.5 5.5 l-1.5 1.5"/></svg>
+              <div class="acc-foot">
+                <div class="acc-name">Lights</div>
+                <div class="acc-state">On</div>
+              </div>
+            </div>
+            <div class="acc">
+              <svg viewBox="0 0 24 24"><path d="M5 17 c2 -3 5 -3 7 0 s5 3 7 0"/><path d="M5 12 c2 -3 5 -3 7 0 s5 3 7 0"/><path d="M5 7 c2 -3 5 -3 7 0 s5 3 7 0"/></svg>
+              <div class="acc-foot">
+                <div class="acc-name">Filter</div>
+                <div class="acc-state">07:30 →</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SPARKLINE (mobile shows here; desktop moves to col-side) -->
+        <section class="card spark mobile-only">
+          <div class="card-label">
+            Past 6 hours
+            <span class="stamp">temperature</span>
+          </div>
+          <svg viewBox="0 0 360 88" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sparkGradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#cc7c3a" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#cc7c3a" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path class="spark-fill"
+              d="M0 60 L30 58 L60 55 L90 50 L120 48 L150 44 L180 42 L210 38 L240 35 L270 30 L300 26 L330 22 L360 20 L360 88 L0 88 Z"/>
+            <path class="spark-line"
+              d="M0 60 L30 58 L60 55 L90 50 L120 48 L150 44 L180 42 L210 38 L240 35 L270 30 L300 26 L330 22 L360 20"/>
+            <circle class="spark-current" cx="360" cy="20" r="3"/>
+            <text class="spark-axis-label" x="0" y="86">−6h</text>
+            <text class="spark-axis-label" x="180" y="86" text-anchor="middle">−3h</text>
+            <text class="spark-axis-label" x="360" y="86" text-anchor="end">now</text>
+          </svg>
+        </section>
+      </div>
+
+      <!-- ========= COL SIDE ========= -->
+      <div class="col-side">
+        <!-- CHEMISTRY -->
+        <section class="card">
+          <div class="card-label">
+            Water chemistry
+            <span class="stamp">SpaBoy · 5m ago</span>
+          </div>
+          <div class="chem-grid">
+            <div class="chem">
+              <div class="chem-name">pH</div>
+              <div class="chem-value good">7.4</div>
+              <div class="chem-range">7.2 — 7.8</div>
+            </div>
+            <div class="chem">
+              <div class="chem-name">Cl</div>
+              <div class="chem-value good">2.1<span class="chem-unit">ppm</span></div>
+              <div class="chem-range">1 — 3</div>
+            </div>
+            <div class="chem">
+              <div class="chem-name">ORP</div>
+              <div class="chem-value warn">580<span class="chem-unit">mV</span></div>
+              <div class="chem-range">600 — 800</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- DESKTOP SPARKLINE -->
+        <section class="card spark desktop-only">
+          <div class="card-label">
+            Past 6 hours
+            <span class="stamp">temperature</span>
+          </div>
+          <svg viewBox="0 0 360 88" preserveAspectRatio="none">
+            <path class="spark-fill"
+              d="M0 60 L30 58 L60 55 L90 50 L120 48 L150 44 L180 42 L210 38 L240 35 L270 30 L300 26 L330 22 L360 20 L360 88 L0 88 Z"/>
+            <path class="spark-line"
+              d="M0 60 L30 58 L60 55 L90 50 L120 48 L150 44 L180 42 L210 38 L240 35 L270 30 L300 26 L330 22 L360 20"/>
+            <circle class="spark-current" cx="360" cy="20" r="3"/>
+            <text class="spark-axis-label" x="0" y="86">−6h</text>
+            <text class="spark-axis-label" x="180" y="86" text-anchor="middle">−3h</text>
+            <text class="spark-axis-label" x="360" y="86" text-anchor="end">now</text>
+          </svg>
+        </section>
+
+        <!-- ALERTS SUMMARY -->
+        <section class="card">
+          <div class="card-label">
+            Alerts
+            <span class="stamp">3 active rules</span>
+          </div>
+          <ul style="list-style:none; display:flex; flex-direction:column; gap:14px;">
+            <li style="display:flex; gap:14px; align-items:flex-start;">
+              <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--moss); margin-top:0.5em;"></span>
+              <div>
+                <div style="font-family:var(--display); font-variation-settings:'opsz' 18,'wght' 500; font-size:0.96rem;">Temperature 100 — 106°F</div>
+                <div style="font-family:var(--mono); font-size:0.62rem; color:var(--paper-mute); letter-spacing:0.12em; margin-top:2px;">IN RANGE</div>
+              </div>
+            </li>
+            <li style="display:flex; gap:14px; align-items:flex-start;">
+              <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--amber); margin-top:0.5em; box-shadow:0 0 8px var(--amber);"></span>
+              <div>
+                <div style="font-family:var(--display); font-variation-settings:'opsz' 18,'wght' 500; font-size:0.96rem;">ORP 600 — 800 mV</div>
+                <div style="font-family:var(--mono); font-size:0.62rem; color:var(--amber); letter-spacing:0.12em; margin-top:2px;">DRIFTING LOW</div>
+              </div>
+            </li>
+            <li style="display:flex; gap:14px; align-items:flex-start;">
+              <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--moss); margin-top:0.5em;"></span>
+              <div>
+                <div style="font-family:var(--display); font-variation-settings:'opsz' 18,'wght' 500; font-size:0.96rem;">Filter cycle daily</div>
+                <div style="font-family:var(--mono); font-size:0.62rem; color:var(--paper-mute); letter-spacing:0.12em; margin-top:2px;">ON SCHEDULE</div>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <div class="stamp">running 14d 6h · 102 °F · 38.9 °C</div>
+  </main>
+
+  <style>
+    .mobile-only { display: block; }
+    .desktop-only { display: none; }
+    @media (min-width: 1024px) {
+      .mobile-only { display: none; }
+      .desktop-only { display: block; }
+    }
+  </style>
+</body>
+</html>
