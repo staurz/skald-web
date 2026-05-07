@@ -110,10 +110,98 @@ body.is-heating::before {
 
 ## Motion
 
-- `drift` keyframe: 38 s ease-in-out alternate. Slow enough to feel atmospheric, not animated.
-- `pulse` on the heating indicator: 2.4 s ease-in-out. The only "alive" element when nothing else is changing.
-- All other transitions: 0.4 s `cubic-bezier(0.2, 0.8, 0.2, 1)`. Soft snap.
-- No hover wiggles, no entrance bounces, no scroll reveals. The vibe is meditative.
+The motion budget is deliberately small. Three discrete uses, no others:
+
+**1. Atmospheric drift (always present, almost subliminal).**
+- `drift` keyframe on `body::before`: 38 s ease-in-out alternate. The gradient field shifts a few pixels, evoking slow respiration.
+- Slow enough that you don't notice it animating — you notice that the page feels alive.
+
+**2. Heating pulse (only when state.heating === true).**
+- `pulse` on the indicator dot inside the hero status pill: 2.4 s ease-in-out, opacity 1 → 0.45 → 1, scale 1 → 0.85 → 1.
+- The only thing on screen that visibly moves when the system is at rest. It's the heartbeat of the heat.
+
+**3. Page-load choreography (once, on app open).**
+A single staggered reveal — the app's entrance moment — and nothing else. Implemented with CSS `animation-delay`:
+
+| Element | Animation | Delay |
+|---|---|---|
+| topbar | `rise` 0.7s | 0 |
+| hero block | `rise` 1.0s | 80 ms |
+| **hero number** | `settle` 1.1s (custom) | 180 ms |
+| accessories card | `rise` 0.9s | 240 ms |
+| chemistry card | `rise` 0.9s | 320 ms |
+| sparkline / desktop side | `rise` 0.9s | 400 ms |
+| alerts card | `rise` 0.9s | 480 ms |
+| footer stamp | `rise` 0.9s | 560 ms |
+
+`rise`: `opacity 0 → 1`, `translateY(12px → 0)`, easing `cubic-bezier(0.2, 0.8, 0.2, 1)`.
+
+`settle` is the hero number's special move — Fraunces' wght axis shifts from 200 to 240 and letter-spacing tightens from -0.06em to -0.045em while fading in. The number visibly focuses into place, like a thermometer settling. Only visible for ~1 s but it's the most distinctive moment in the app.
+
+**Reduced motion:** wrap all entrance animations in `@media (prefers-reduced-motion: no-preference)`. The drift and pulse stay, but the entrance choreography turns off — accessibility before delight.
+
+**State-change transitions** (after the entrance):
+- Numerical updates (temperature changing): `opacity 0.3s ease` with a brief `transform: translateY(2px)` when the digit changes. Don't redo the entrance.
+- Card body changes (state going stale, accessory toggling): `transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)`.
+- No hover wiggles, no scroll reveals, no entrance bounces on subsequent navigation.
+
+## States
+
+Beyond the happy path, the dashboard must look intentional in five other states. Mockups in `design/states.html`.
+
+### Loading (~200–800 ms, between page-open and first MQTT message)
+- Skeleton numbers with shimmering gradient (1.6 s ease-in-out infinite, background-position 100% → 0).
+- Same colours as the regular UI just dimmer — `--paper-faint` to `--paper-line` gradient on text via `background-clip: text`.
+- Status stamp reads `connecting…` instead of `updated 12 s ago`.
+- No spinner. The shimmer signals "alive, just waiting".
+
+### Stale (>5 min since last update, while still connected)
+- Hero number colour drops from `--paper` to `--paper-mute` (about 50% opacity).
+- Timestamp colour flips to `--amber` and reads e.g. `last seen 14 min ago`.
+- Small amber pill below the number: `Connection silent — values may be outdated`.
+- Nothing flashing or red — the data isn't *wrong*, just *old*.
+
+### Active error (errors array non-empty)
+- A rust-toned banner appears at the top of the dashboard, **above** the hero — physically the first thing the eye lands on.
+- Background: `linear-gradient(90deg, rgba(194,91,72,0.20), rgba(194,91,72,0.08))`, border `1px rgba(194,91,72,0.4)`.
+- Triangle-with-dot icon in `--rust` on the left.
+- Title in Fraunces 1rem display weight, detail in mono. Time-since on the right.
+- Tappable to expand. Multiple errors stack vertically with 8 px gaps.
+
+### No Spa Boy data (chemistry card before any payload, or if hardware absent)
+- Chemistry card replaced with a quiet placeholder block.
+- Disabled-style sensor icon at top.
+- Title: `Awaiting first reading` (display 1.15rem).
+- Body: `No data has arrived on telemetry/spaboy yet. Values appear here once the sensor reports.`
+- Mono pill at the bottom: `offline`.
+- Distinct from "out of range": those use rust/amber colours on populated values, this is greyed-out and informational.
+
+### Setup (no credentials configured)
+- Defer detailed design to implementation. Use `design/dashboard-preview.html`'s palette and typography. Single full-page form, generous padding, two inputs (email + password), single button labelled `Connect`. Brief copy explaining what happens to the password (used once, hashed, raw discarded). One sentence, italic Fraunces, `--paper-soft` colour.
+
+## Icon
+
+Source: `design/icon.svg`. A miniature portrait of the dashboard's atmosphere — deep ink rounded square, copper-amber glow rising from the bottom, a single thin pearl line near the upper third (the "water surface"), a copper dot anchoring the lower centre (the "heating heart"), with a soft halo around it.
+
+**Why this composition:** at 16px favicon size you still see *a warm point in a dark frame* — the spa's emotional shape. At 192/512px you see the full atmospheric portrait. Same gesture, scales down faithfully.
+
+**Colour set used:**
+- `--ink` (#0a1320) — base
+- `--copper` (#cc7c3a) — heating dot + glow
+- `--paper` (#f3ede0) at 30% opacity — surface line
+
+**Generating PNGs from this SVG (Task 19 step 2 update):**
+Replace the "drop in placeholder PNGs" instruction with: install `sharp` as a build-time dep, write a small Node script that reads `design/icon.svg` and outputs `static/icon-192.png` (192×192) and `static/icon-512.png` (512×512). Or run it once manually:
+
+```bash
+npm install --save-dev sharp
+node -e "require('sharp')('design/icon.svg').resize(192, 192).png().toFile('static/icon-192.png')"
+node -e "require('sharp')('design/icon.svg').resize(512, 512).png().toFile('static/icon-512.png')"
+```
+
+The SVG itself can also be referenced directly in the manifest as `{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }` for browsers that support it.
+
+Preview at multiple sizes and contexts: `design/icon-preview.html`.
 
 ## Component primitives
 
