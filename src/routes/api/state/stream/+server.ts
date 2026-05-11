@@ -5,24 +5,32 @@ export const GET: RequestHandler = () => {
   const b = getBoot();
   if (!b) return new Response('boot not started', { status: 503 });
 
+  let closed = false;
+  let unsubscribe: (() => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+
   const stream = new ReadableStream({
     start(controller) {
-      const send = (data: unknown) => controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+      const safeEnqueue = (chunk: string) => {
+        if (closed) return;
+        try { controller.enqueue(chunk); }
+        catch { teardown(); }
+      };
+      const send = (data: unknown) => safeEnqueue(`data: ${JSON.stringify(data)}\n\n`);
 
       send({ kind: 'snapshot', state: b.state.snapshot() });
-
-      const unsubscribe = b.state.onChange((s) => send({ kind: 'snapshot', state: s }));
-      const heartbeat = setInterval(() => controller.enqueue(': ping\n\n'), 25_000);
-
-      return () => {
-        unsubscribe();
-        clearInterval(heartbeat);
-      };
+      unsubscribe = b.state.onChange((s) => send({ kind: 'snapshot', state: s }));
+      heartbeat = setInterval(() => safeEnqueue(': ping\n\n'), 25_000);
     },
-    cancel() {
-      /* teardown handled by start's returned function */
-    },
+    cancel() { teardown(); },
   });
+
+  function teardown() {
+    if (closed) return;
+    closed = true;
+    if (heartbeat) clearInterval(heartbeat);
+    unsubscribe?.();
+  }
 
   return new Response(stream, {
     headers: {
