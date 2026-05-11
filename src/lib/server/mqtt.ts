@@ -2,10 +2,34 @@ import mqtt from 'mqtt';
 import type { MqttClient, IClientOptions } from 'mqtt';
 import type { RawMqttEvent } from './types';
 
+// Legacy-tcp subscriptions, taken from MqttManager.java's MQTT_SUBSCRIPTION_TOPIC enum
+// (entries where _isAWS == false). The broker's ACL rejects wildcards (SUBACK 128),
+// so the topics must be enumerated explicitly.
+export const LEGACY_TOPIC_TEMPLATES: readonly string[] = [
+  'arctic/spa/%s/config/spa',
+  'arctic/spa/%s/telemetry/spa',
+  'arctic/spa/%s/telemetry/filters',
+  'arctic/spa/%s/telemetry/rfid',
+  'arctic/spa/%s/telemetry/errors',
+  'arctic/spa/%s/telemetry/spaboy',
+  'arctic/spa/%s/telemetry/heartbeat',
+  'arctic/spa/%s/telemetry/update',
+  'arctic/spa/%s/information/spa',
+  'arctic/spa/%s/information/network',
+  'arctic/spa/%s/settings/spa',
+  'arctic/spa/%s/settings/spaboy',
+  'arctic/spa/%s/settings/peak',
+];
+
+export function buildLegacyTopics(uuid: string): string[] {
+  return LEGACY_TOPIC_TEMPLATES.map(t => t.replace('%s', uuid));
+}
+
 export type MqttPipelineOpts = {
   uuid: string;
   jwt?: string;
   url?: string;
+  topics?: string[]; // override default legacy list
   connect?: (url: string, opts: IClientOptions) => MqttClient;
   onEvent: (e: RawMqttEvent) => void;
   onError?: (err: Error) => void;
@@ -26,8 +50,8 @@ export function createMqttPipeline(opts: MqttPipelineOpts) {
     });
 
     client.on('connect', () => {
-      const topic = `arctic/spa/${opts.uuid}/#`;
-      client!.subscribe(topic, { qos: 0 }, (err: Error | null) => {
+      const topics = opts.topics ?? buildLegacyTopics(opts.uuid);
+      client!.subscribe(topics, { qos: 0 }, (err: Error | null) => {
         if (err) opts.onError?.(err);
       });
     });
