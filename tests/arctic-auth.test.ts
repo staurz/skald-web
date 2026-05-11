@@ -14,12 +14,12 @@ const fakeFetch = (responses: Array<{ status: number; body: unknown }>) => {
 };
 
 describe('validateUser', () => {
-  it('POSTs to /api/auth and returns Salt/UserId/Spas', async () => {
+  it('POSTs to REG_SITE/api/auth and returns Salt/UserId/Spas', async () => {
     const f = fakeFetch([{ status: 200, body: { ErrorCode: 0, Salt: 'c2FsdA==', UserId: 'user-1', Spas: [{ Id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NickName: 'Mine', IsConnected: true, IsMoved: null, DealerId: 0 }] } }]);
     vi.stubGlobal('fetch', f);
     const r = await validateUser('user@example.com', 'pw');
     expect(f).toHaveBeenCalledWith(
-      'https://api.myarcticspa.com/api/auth',
+      'https://myarcticspa.com/api/auth',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({ Username: 'user@example.com', Password: 'pw' }) }),
     );
     expect(r.Salt).toBe('c2FsdA==');

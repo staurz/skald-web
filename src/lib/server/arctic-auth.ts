@@ -1,20 +1,23 @@
 import type { OAuth2AccessToken, ValidateUserResponse, AuthenticationSpa } from './types';
 
-const API = 'https://api.myarcticspa.com';
+// REG_SITE hosts /api/auth (credential validation + salt), confirmed in WebServerService.java.
+// API_SERVER hosts /access_token (OAuth grant + refresh), confirmed in AccessServerService.java.
+const REG_SITE = 'https://myarcticspa.com';
+const API_SERVER = 'https://api.myarcticspa.com';
 const OAUTH_CLIENT_ID = 'mqtt-mobile';
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`POST ${path} → ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`POST ${url} → ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
 }
 
 export async function validateUser(email: string, password: string): Promise<ValidateUserResponse> {
-  return postJson<ValidateUserResponse>('/api/auth', { Username: email, Password: password });
+  return postJson<ValidateUserResponse>(`${REG_SITE}/api/auth`, { Username: email, Password: password });
 }
 
 export type GrantArgs = {
@@ -27,7 +30,7 @@ export type GrantArgs = {
 export async function grantToken(args: GrantArgs): Promise<OAuth2AccessToken> {
   const spaIdLower = args.spa.Id.toLowerCase();
   const username = `${args.email}|${spaIdLower}`;
-  return postJson<OAuth2AccessToken>('/access_token', {
+  return postJson<OAuth2AccessToken>(`${API_SERVER}/access_token`, {
     grant_type: 'password',
     client_id: OAUTH_CLIENT_ID,
     username,
@@ -37,7 +40,7 @@ export async function grantToken(args: GrantArgs): Promise<OAuth2AccessToken> {
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<OAuth2AccessToken> {
-  return postJson<OAuth2AccessToken>('/access_token', {
+  return postJson<OAuth2AccessToken>(`${API_SERVER}/access_token`, {
     grant_type: 'refresh_token',
     client_id: OAUTH_CLIENT_ID,
     refresh_token: refreshToken,
