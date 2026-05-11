@@ -1,38 +1,56 @@
+import { randomUUID } from 'node:crypto';
 import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
-import { hashPassword } from '$lib/server/hasher';
-import { validateUser, grantToken, spaUuidFromJwt } from '$lib/server/arctic-auth';
+import { authenticate, grantToken, spaUuidFromJwt } from '$lib/server/arctic-auth';
 import { defaultSecrets } from '$lib/server/secrets';
 
+function getOrCreateInstallationId(): string {
+  let id = defaultSecrets.get('INSTALLATION_ID');
+  if (!id) {
+    id = randomUUID();
+    defaultSecrets.set('INSTALLATION_ID', id);
+  }
+  return id;
+}
+
 export const POST: RequestHandler = async ({ request }) => {
-  const { email, password } = await request.json() as { email: string; password: string };
-  if (!email || !password) throw error(400, 'email and password required');
+  const { username, password } = await request.json() as { username: string; password: string };
+  if (!username || !password) throw error(400, 'username and password required');
 
-  let stage = 'validateUser';
+  let stage = 'authenticate';
   try {
-    const validation = await validateUser(email, password);
-    if (validation.ErrorCode && validation.ErrorCode !== 0) throw error(401, `validateUser ErrorCode=${validation.ErrorCode}`);
-    if (!validation.Salt) throw error(401, 'no salt returned — credentials likely invalid');
-    if (!validation.Spas || validation.Spas.length === 0) throw error(404, 'no spa associated with this account');
+    const auth = await authenticate(username, password);
+    if (auth.spas.length === 0) throw error(404, 'no spa associated with this account');
 
-    const spa = validation.Spas[0]; // single-spa assumption for v1
-    stage = 'hashPassword';
-    const passwordHash = hashPassword(password, validation.Salt);
+    const spa = auth.spas[0]; // single-spa assumption for v1
+    const installationId = getOrCreateInstallationId();
 
     stage = 'grantToken';
-    const token = await grantToken({ email, passwordHash, spa, userId: validation.UserId });
+    const token = await grantToken({
+      username,
+      passwordHash: auth.passwordHash,
+      spa,
+      installationId,
+      userId: auth.userId,
+    });
     const spaUuid = spaUuidFromJwt(token.access_token) ?? spa.Id;
 
     stage = 'persistSecrets';
-    defaultSecrets.set('ARCTIC_USERNAME', email);
-    defaultSecrets.set('ARCTIC_USER_ID', validation.UserId ?? '');
+    defaultSecrets.set('ARCTIC_USERNAME', username);
+    defaultSecrets.set('ARCTIC_USER_ID', auth.userId ?? '');
     defaultSecrets.set('ARCTIC_SPA_UUID', spaUuid);
-    defaultSecrets.set('ARCTIC_PASSWORD_HASH', passwordHash);
+    defaultSecrets.set('ARCTIC_PASSWORD_HASH', auth.passwordHash);
     defaultSecrets.set('ARCTIC_REFRESH_TOKEN', token.refresh_token);
 
-    return json({ ok: true, spaUuid, expires_in: token.expires_in });
+    return json({
+      ok: true,
+      spaUuid,
+      expires_in: token.expires_in,
+      isMoved: spa.IsMoved,
+      mqttPath: spa.IsMoved === true ? 'aws-iot' : 'legacy-tcp',
+    });
   } catch (e: any) {
-    if (e?.status) throw e; // re-throw SvelteKit HttpError
+    if (e?.status) throw e;
     const detail = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e);
     console.error(`[setup] failed at stage ${stage}:`, detail);
     return json({ ok: false, stage, error: detail }, { status: 500 });
