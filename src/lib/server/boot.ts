@@ -4,6 +4,7 @@ import { createAuthManager } from './auth-manager';
 import { createMqttPipeline } from './mqtt';
 import { createStateStore } from './state';
 import { openDb } from './db';
+import { startRollupLoop } from './history';
 import type { AuthenticationSpa } from './types';
 
 let started = false;
@@ -72,6 +73,7 @@ export function startBackend(): BootResult {
       let lastJwt = await auth.getValidToken();
       pipe.setJwt(lastJwt);
       pipe.start();
+      startRollupLoop(db);
       ready = true;
       console.log('[boot] MQTT started');
 
