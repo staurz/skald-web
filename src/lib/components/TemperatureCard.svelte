@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { SpaState } from '$lib/server/types';
-  export let state: SpaState | null;
-  $: t = state?.temperatureF;
-  $: target = state?.targetTemperatureF;
-  $: heating = state?.heating ?? false;
+
+  let { state }: { state: SpaState | null } = $props();
+  let t = $derived(state?.temperatureF);
+  let target = $derived(state?.targetTemperatureF);
+  let heating = $derived(state?.heating ?? false);
+
   function fToC(f: number) {
     return Math.round(((f - 32) * 5 / 9) * 10) / 10;
   }

@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { SpaState } from '$lib/server/types';
-  export let state: SpaState | null;
-  $: c = state?.chemistry;
+
+  let { state }: { state: SpaState | null } = $props();
+  let c = $derived(state?.chemistry);
 
   function tone(v: number | undefined, lo: number, hi: number): string {
     if (v == null) return 'text-gray-400';

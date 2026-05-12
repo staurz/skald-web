@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { SpaState } from '$lib/server/types';
-  export let state: SpaState | null;
-  $: pumps = state?.pumps ?? [];
-  $: blower = state?.blower ?? false;
-  $: lights = state?.lights ?? false;
+
+  let { state }: { state: SpaState | null } = $props();
+  let pumps = $derived(state?.pumps ?? []);
+  let blower = $derived(state?.blower ?? false);
+  let lights = $derived(state?.lights ?? false);
 
   function pumpBg(speed: 0 | 1 | 2) {
     return speed === 0
