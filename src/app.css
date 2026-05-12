@@ -482,6 +482,126 @@ body.is-heating::before {
   letter-spacing: 0;
 }
 
+/* Info trigger sits inline with each chem-name. */
+.chem-info {
+  background: transparent;
+  border: 1px solid var(--paper-faint);
+  color: var(--paper-mute);
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  letter-spacing: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 8px;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.3s;
+  vertical-align: middle;
+}
+.chem-info:hover,
+.chem-info[aria-expanded='true'] {
+  color: var(--paper);
+  border-color: var(--copper-dim);
+}
+
+/* Floating disclosure panel, anchored to the chemistry card. */
+.chem-tooltip {
+  position: relative;
+  z-index: 2;
+  margin-top: 22px;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--paper-line);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, rgba(36, 58, 88, 0.55), rgba(18, 32, 53, 0.85));
+  animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.chem-tooltip h3 {
+  font-family: var(--display);
+  font-variation-settings: 'opsz' 24, 'SOFT' 60, 'wght' 500;
+  font-size: 1.1rem;
+  color: var(--paper);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+.chem-tooltip .tip-range {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  margin-bottom: 14px;
+}
+.chem-tooltip p {
+  font-family: var(--display);
+  font-variation-settings: 'opsz' 14, 'wght' 400;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--paper-soft);
+  margin: 0 0 16px;
+}
+.chem-tooltip .tip-heading {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--copper);
+  margin: 0 0 10px;
+}
+.chem-tooltip ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: tip;
+}
+.chem-tooltip ol li {
+  counter-increment: tip;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--paper-line);
+}
+.chem-tooltip ol li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.chem-tooltip ol li::before {
+  content: counter(tip, decimal-leading-zero);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--copper);
+  letter-spacing: 0.12em;
+}
+.chem-tooltip ol li b {
+  font-family: var(--display);
+  font-variation-settings: 'opsz' 14, 'wght' 500;
+  font-size: 0.92rem;
+  color: var(--paper);
+  font-weight: normal;
+}
+.chem-tooltip ol li span {
+  display: block;
+  font-family: var(--display);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--paper-soft);
+  margin-top: 2px;
+}
+.chem-tooltip .tip-footer {
+  margin-top: 16px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--paper-faint);
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+}
+
 /* =================== SPARKLINE / HISTORY CHART =================== */
 
 .spark {

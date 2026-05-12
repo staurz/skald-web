@@ -35,7 +35,7 @@
       <AccessoryGrid state={$spaState} />
     </div>
     <div class="col-side">
-      <ChemistryCard state={$spaState} />
+      <ChemistryCard spa={$spaState} />
     </div>
   </div>
 
