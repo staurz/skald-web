@@ -75,6 +75,9 @@ export function startBackend(): BootResult {
       ready = true;
       console.log('[boot] MQTT started');
 
+      // Poll often so the auth manager's natural caching (75% of expires_in)
+      // controls rotation; without this, an expired JWT triggers an MQTT
+      // auto-reconnect storm every 2 s until the next tick.
       setInterval(async () => {
         try {
           const fresh = await auth.getValidToken();
@@ -85,7 +88,7 @@ export function startBackend(): BootResult {
         } catch (err) {
           console.error('[boot] token refresh failed', err);
         }
-      }, 10 * 60 * 1000);
+      }, 60 * 1000);
     } catch (err) {
       console.error('[boot] failed to start MQTT', err);
     }
