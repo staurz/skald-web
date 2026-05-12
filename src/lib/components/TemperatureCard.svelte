@@ -1,15 +1,12 @@
 <script lang="ts">
   import type { SpaState } from '$lib/server/types';
+  import { fToC } from '$lib/util/units';
 
   let { state }: { state: SpaState | null } = $props();
-  let t = $derived(state?.temperatureF);
-  let target = $derived(state?.targetTemperatureF);
+  let tC = $derived(state?.temperatureF != null ? fToC(state.temperatureF) : undefined);
+  let targetC = $derived(state?.targetTemperatureF != null ? fToC(state.targetTemperatureF) : undefined);
   let heating = $derived(state?.heating ?? false);
   let ts = $derived(state?.ts);
-
-  function fToC(f: number) {
-    return Math.round(((f - 32) * 5 / 9) * 10) / 10;
-  }
 
   function relativeStamp(updatedAt?: number): string {
     if (!updatedAt) return 'connecting…';
@@ -31,13 +28,12 @@
     <span class="timestamp">{stamp}</span>
   </div>
   <div class="hero-number">
-    <span>{t ?? '—'}</span><span class="hero-unit">°F</span>
+    <span>{tC ?? '—'}</span><span class="hero-unit">°C</span>
   </div>
-  <div class="hero-celsius">{t != null ? `${fToC(t)} °C` : '— °C'}</div>
   <div class="hero-meta">
     <span class="hero-target">
       <span class="hero-target-label">Target</span>
-      <span class="hero-target-num">{target ?? '—'}°F</span>
+      <span class="hero-target-num">{targetC ?? '—'}°C</span>
     </span>
     {#if heating}
       <span class="hero-status">Heating</span>

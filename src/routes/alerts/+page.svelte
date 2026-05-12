@@ -172,7 +172,7 @@
             value={thresholdText(rule)}
             oninput={(e) => setThreshold(i, e.currentTarget.value)}
             class="input-mono"
-            placeholder={'{"minF":100,"maxF":105}'}
+            placeholder={'{"minC":38,"maxC":41}'}
           ></textarea>
         </div>
       </li>

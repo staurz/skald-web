@@ -2,8 +2,18 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import HistoryChart from '$lib/components/HistoryChart.svelte';
+  import { fToC } from '$lib/util/units';
 
   type Pt = { ts_bucket: number; avg: number; min: number; max: number; sample_count: number };
+
+  function toCelsius(pts: Pt[]): Pt[] {
+    return pts.map((p) => ({
+      ...p,
+      avg: fToC(p.avg),
+      min: fToC(p.min),
+      max: fToC(p.max),
+    }));
+  }
 
   let temp = $state<Pt[]>([]);
   let target = $state<Pt[]>([]);
@@ -58,17 +68,17 @@
   <section class="card">
     <div class="card-label">
       Temperature
-      <span class="stamp">°F</span>
+      <span class="stamp">°C</span>
     </div>
-    <HistoryChart points={temp} yLabel="°F" />
+    <HistoryChart points={toCelsius(temp)} yLabel="°C" />
   </section>
 
   <section class="card">
     <div class="card-label">
       Target temperature
-      <span class="stamp">°F</span>
+      <span class="stamp">°C</span>
     </div>
-    <HistoryChart points={target} yLabel="°F" />
+    <HistoryChart points={toCelsius(target)} yLabel="°C" />
   </section>
 
   <section class="card">

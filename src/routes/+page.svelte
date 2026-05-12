@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { spaState, startStateStream } from '$lib/client/state-store';
+  import { fToC } from '$lib/util/units';
   import TemperatureCard from '$lib/components/TemperatureCard.svelte';
   import AccessoryGrid from '$lib/components/AccessoryGrid.svelte';
   import ChemistryCard from '$lib/components/ChemistryCard.svelte';
@@ -41,7 +42,7 @@
   <div class="footer-stamp">
     {uptimeStamp()}
     {#if $spaState?.temperatureF != null}
-      · {$spaState.temperatureF} °F
+      · {fToC($spaState.temperatureF)} °C
     {/if}
   </div>
 </main>

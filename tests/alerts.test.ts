@@ -17,22 +17,32 @@ describe('evaluateRules', () => {
     expect(evaluateRules(rules, baseState({ errors: [] }))).toEqual([]);
   });
 
-  it('fires temperature_outside below minF', () => {
-    const rules: AlertRule[] = [{ id: 'r2', kind: 'temperature_outside', threshold: { minF: 100, maxF: 105 }, enabled: true }];
+  it('fires temperature_outside below minC (Celsius threshold)', () => {
+    const rules: AlertRule[] = [{ id: 'r2', kind: 'temperature_outside', threshold: { minC: 38, maxC: 41 }, enabled: true }];
+    // 99 °F = 37.2 °C, below 38 °C
     const fires = evaluateRules(rules, baseState({ temperatureF: 99 }));
     expect(fires).toHaveLength(1);
     expect(fires[0].ruleId).toBe('r2');
-    expect(fires[0].payload).toMatchObject({ temperatureF: 99, min: 100, max: 105 });
+    expect(fires[0].payload).toMatchObject({ minC: 38, maxC: 41 });
   });
 
-  it('fires temperature_outside above maxF', () => {
-    const rules: AlertRule[] = [{ id: 'r2', kind: 'temperature_outside', threshold: { minF: 100, maxF: 105 }, enabled: true }];
+  it('fires temperature_outside above maxC', () => {
+    const rules: AlertRule[] = [{ id: 'r2', kind: 'temperature_outside', threshold: { minC: 38, maxC: 41 }, enabled: true }];
+    // 110 °F = 43.3 °C, above 41 °C
     expect(evaluateRules(rules, baseState({ temperatureF: 110 }))).toHaveLength(1);
   });
 
-  it('does not fire temperature_outside in range', () => {
-    const rules: AlertRule[] = [{ id: 'r2', kind: 'temperature_outside', threshold: { minF: 100, maxF: 105 }, enabled: true }];
-    expect(evaluateRules(rules, baseState({ temperatureF: 102 }))).toEqual([]);
+  it('does not fire temperature_outside when Celsius is in range', () => {
+    const rules: AlertRule[] = [{ id: 'r2', kind: 'temperature_outside', threshold: { minC: 38, maxC: 41 }, enabled: true }];
+    // 104 °F = 40 °C, in [38, 41]
+    expect(evaluateRules(rules, baseState({ temperatureF: 104 }))).toEqual([]);
+  });
+
+  it('still supports legacy minF/maxF thresholds (back-compat)', () => {
+    const rules: AlertRule[] = [{ id: 'rL', kind: 'temperature_outside', threshold: { minF: 100, maxF: 105 }, enabled: true }];
+    const fires = evaluateRules(rules, baseState({ temperatureF: 99 }));
+    expect(fires).toHaveLength(1);
+    expect(fires[0].payload).toMatchObject({ temperatureF: 99, minF: 100, maxF: 105 });
   });
 
   it('skips disabled rules entirely', () => {

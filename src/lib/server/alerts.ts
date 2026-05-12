@@ -1,4 +1,5 @@
 import type { AlertRule, SpaState } from './types';
+import { fToC } from '../util/units';
 
 export type AlertFire = { ruleId: string; payload: Record<string, unknown> };
 
@@ -21,11 +22,25 @@ function evaluateOne(r: AlertRule, state: SpaState): AlertFire | null {
       return null;
     }
     case 'temperature_outside': {
-      const t = state.temperatureF;
-      if (t == null) return null;
-      const min = Number(r.threshold.minF);
-      const max = Number(r.threshold.maxF);
-      if (t < min || t > max) return { ruleId: r.id, payload: { temperatureF: t, min, max } };
+      const tF = state.temperatureF;
+      if (tF == null) return null;
+      // Thresholds may be supplied as Celsius (minC/maxC) — the UI default — or
+      // Fahrenheit (minF/maxF) for back-compat with rules saved before the unit
+      // switch. Celsius wins if both are present.
+      if (r.threshold.minC != null || r.threshold.maxC != null) {
+        const tC = fToC(tF);
+        const minC = Number(r.threshold.minC ?? -Infinity);
+        const maxC = Number(r.threshold.maxC ?? Infinity);
+        if (tC < minC || tC > maxC) {
+          return { ruleId: r.id, payload: { temperatureC: tC, minC, maxC } };
+        }
+        return null;
+      }
+      const minF = Number(r.threshold.minF ?? -Infinity);
+      const maxF = Number(r.threshold.maxF ?? Infinity);
+      if (tF < minF || tF > maxF) {
+        return { ruleId: r.id, payload: { temperatureF: tF, minF, maxF } };
+      }
       return null;
     }
     case 'filter_cycle_missed': {
