@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Skålda">
+  <defs>
+    <!-- Warm glow rising from the bottom — same gesture as the dashboard atmosphere -->
+    <radialGradient id="glow" cx="50%" cy="100%" r="85%">
+      <stop offset="0%"   stop-color="#cc7c3a" stop-opacity="0.85"/>
+      <stop offset="35%"  stop-color="#cc7c3a" stop-opacity="0.45"/>
+      <stop offset="70%"  stop-color="#cc7c3a" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#0a1320" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Cool tone above -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#243a58" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#243a58" stop-opacity="0"/>
+    </linearGradient>
+    <!-- Soft inner highlight on the top edge to give the rounded square a tactile feel -->
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#f3ede0" stop-opacity="0.10"/>
+      <stop offset="20%" stop-color="#f3ede0" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Base: deep ink rounded square (Android adaptive icon shape, 1/8 corner radius) -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#0a1320"/>
+
+  <!-- Atmospheric glow from below -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#glow)"/>
+  <!-- Cool tone above -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#sky)"/>
+  <!-- Top rim highlight -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#rim)"/>
+
+  <!-- The "water surface" line — pearl/cream, low opacity, slightly off-centre to upper third -->
+  <line x1="120" y1="216" x2="392" y2="216"
+        stroke="#f3ede0" stroke-opacity="0.30" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- The heating dot — small, copper, glowing — anchors the composition -->
+  <circle cx="256" cy="320" r="22" fill="#cc7c3a"/>
+  <!-- Outer glow on the dot, simulated by another circle behind with lower opacity -->
+  <circle cx="256" cy="320" r="44" fill="#cc7c3a" fill-opacity="0.22"/>
+  <circle cx="256" cy="320" r="78" fill="#cc7c3a" fill-opacity="0.10"/>
+</svg>
