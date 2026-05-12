@@ -1,0 +1,16 @@
+node_modules
+build
+.svelte-kit
+.git
+.github
+.idea
+.vscode
+spike
+data
+.env
+.env.local
+docs
+tests
+scripts
+design
+*.log
