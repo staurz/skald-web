@@ -3,28 +3,45 @@
 
   let { state }: { state: SpaState | null } = $props();
   let c = $derived(state?.chemistry);
+  let ts = $derived(state?.ts);
 
-  function tone(v: number | undefined, lo: number, hi: number): string {
-    if (v == null) return 'text-gray-400';
-    if (v < lo || v > hi) return 'text-red-600 dark:text-red-400 font-bold';
-    return 'text-emerald-600 dark:text-emerald-400 font-bold';
+  function tone(v: number | undefined, lo: number, hi: number): 'good' | 'warn' | 'bad' | 'empty' {
+    if (v == null) return 'empty';
+    if (v < lo - (hi - lo) * 0.15 || v > hi + (hi - lo) * 0.15) return 'bad';
+    if (v < lo || v > hi) return 'warn';
+    return 'good';
   }
+
+  function relativeStamp(updatedAt?: number): string {
+    if (!updatedAt) return '';
+    const secs = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+    if (secs < 60) return `SpaBoy · ${secs}s ago`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `SpaBoy · ${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    return `SpaBoy · ${hrs}h ago`;
+  }
+
+  let phTone = $derived(tone(c?.ph, 7.2, 7.8));
+  let orpTone = $derived(tone(c?.orp, 600, 800));
+  let stamp = $derived(relativeStamp(ts));
 </script>
 
-<div class="rounded-2xl border border-gray-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-900">
-  <h2 class="text-sm uppercase tracking-wider text-gray-500 mb-3">Water chemistry</h2>
-  {#if c}
-    <div class="grid grid-cols-2 gap-4 text-center">
-      <div>
-        <div class="text-xs text-gray-500">pH</div>
-        <div class={`text-3xl ${tone(c.ph, 7.2, 7.8)}`}>{c.ph?.toFixed(2) ?? '—'}</div>
-      </div>
-      <div>
-        <div class="text-xs text-gray-500">ORP (mV)</div>
-        <div class={`text-3xl ${tone(c.orp, 600, 800)}`}>{c.orp ?? '—'}</div>
-      </div>
+<section class="card">
+  <div class="card-label">
+    Water chemistry
+    {#if stamp}<span class="stamp">{stamp}</span>{/if}
+  </div>
+  <div class="chem-grid">
+    <div class="chem">
+      <div class="chem-name">pH</div>
+      <div class={`chem-value ${phTone}`}>{c?.ph?.toFixed(2) ?? '—'}</div>
+      <div class="chem-range">7.2 — 7.8</div>
     </div>
-  {:else}
-    <div class="text-sm text-gray-400">No data yet</div>
-  {/if}
-</div>
+    <div class="chem">
+      <div class="chem-name">ORP</div>
+      <div class={`chem-value ${orpTone}`}>{c?.orp ?? '—'}<span class="chem-unit">mV</span></div>
+      <div class="chem-range">600 — 800</div>
+    </div>
+  </div>
+</section>

@@ -5,22 +5,42 @@
   let t = $derived(state?.temperatureF);
   let target = $derived(state?.targetTemperatureF);
   let heating = $derived(state?.heating ?? false);
+  let ts = $derived(state?.ts);
 
   function fToC(f: number) {
     return Math.round(((f - 32) * 5 / 9) * 10) / 10;
   }
+
+  function relativeStamp(updatedAt?: number): string {
+    if (!updatedAt) return 'connecting…';
+    const secs = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+    if (secs < 5) return 'just now';
+    if (secs < 60) return `updated ${secs}s ago`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `updated ${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    return `updated ${hrs}h ago`;
+  }
+
+  let stamp = $derived(relativeStamp(ts));
 </script>
 
-<div class="rounded-2xl border border-gray-200 dark:border-zinc-800 p-6 bg-white dark:bg-zinc-900">
-  <h2 class="text-sm uppercase tracking-wider text-gray-500">Temperature</h2>
-  <div class="flex items-baseline gap-3 mt-2">
-    <span class="text-5xl font-bold">{t ?? '—'}<span class="text-2xl">°F</span></span>
-    <span class="text-lg text-gray-500">{t != null ? fToC(t) : '—'}°C</span>
+<section class="hero">
+  <div class="hero-label">
+    Water temperature
+    <span class="timestamp">{stamp}</span>
   </div>
-  <div class="mt-3 text-sm text-gray-500">
-    Target: <span class="font-medium">{target ?? '—'}°F</span>
+  <div class="hero-number">
+    <span>{t ?? '—'}</span><span class="hero-unit">°F</span>
+  </div>
+  <div class="hero-celsius">{t != null ? `${fToC(t)} °C` : '— °C'}</div>
+  <div class="hero-meta">
+    <span class="hero-target">
+      <span class="hero-target-label">Target</span>
+      <span class="hero-target-num">{target ?? '—'}°F</span>
+    </span>
     {#if heating}
-      <span class="ml-3 inline-block px-2 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">Heating</span>
+      <span class="hero-status">Heating</span>
     {/if}
   </div>
-</div>
+</section>
