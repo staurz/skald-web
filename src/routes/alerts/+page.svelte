@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import type { AlertRule } from '$lib/server/types';
 
   let rules = $state<AlertRule[]>([]);
@@ -42,8 +43,8 @@
       body: JSON.stringify({ rules }),
     });
     saving = false;
-    savedMsg = res.ok ? 'Saved.' : 'Save failed.';
-    setTimeout(() => (savedMsg = ''), 2000);
+    savedMsg = res.ok ? 'saved' : 'save failed';
+    setTimeout(() => (savedMsg = ''), 2400);
   }
 
   function urlBase64ToUint8Array(base64: string) {
@@ -75,65 +76,118 @@
       const parsed = JSON.parse(value || '{}');
       rules[i] = { ...rules[i], threshold: parsed };
     } catch {
-      /* ignore — user is mid-typing invalid JSON */
+      /* user is mid-typing invalid JSON — ignore */
+    }
+  }
+
+  function kindLabel(kind: AlertRule['kind']): string {
+    switch (kind) {
+      case 'error_present': return 'Error present';
+      case 'temperature_outside': return 'Temperature outside range';
+      case 'filter_cycle_missed': return 'Filter cycle missed';
+      case 'chemistry_outside': return 'Chemistry outside range';
     }
   }
 
   onMount(load);
 </script>
 
-<main class="max-w-3xl mx-auto p-4 space-y-4">
-  <header class="flex items-center justify-between mb-2">
-    <h1 class="text-xl font-bold">Alerts</h1>
-    <a href="/" class="text-sm hover:underline">← Dashboard</a>
+<main class="app">
+  <header class="topbar">
+    <a class="mark" href="/">
+      Skålda<span class="mark-dot"></span>
+    </a>
+    <nav class="nav">
+      <a href="/" class:active={$page.url.pathname === '/'}>Now</a>
+      <a href="/history" class:active={$page.url.pathname === '/history'}>History</a>
+      <a href="/alerts" class:active={$page.url.pathname === '/alerts'}>Alerts</a>
+    </nav>
   </header>
 
-  <div class="flex items-center gap-3">
-    <button
-      onclick={enablePush}
-      class="bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 px-3 py-1 rounded"
-    >
-      Enable push notifications
-    </button>
-    {#if pushReady}
-      <span class="text-emerald-600 text-sm">subscribed</span>
-    {/if}
-  </div>
+  <section class="hero" style="margin-bottom:48px;">
+    <div class="hero-label">
+      Alerts
+      <span class="timestamp">{rules.length} rule{rules.length === 1 ? '' : 's'}</span>
+    </div>
+    <div class="hero-meta" style="margin-top:8px;">
+      <button class="btn-primary" onclick={enablePush}>Enable push</button>
+      {#if pushReady}
+        <span class="hero-status">Subscribed</span>
+      {/if}
+    </div>
+  </section>
 
-  <ul class="space-y-3">
+  {#if rules.length === 0}
+    <section class="card">
+      <div class="card-label">
+        No rules yet
+        <span class="stamp">tap + to add</span>
+      </div>
+      <p style="font-family:var(--display); color:var(--paper-soft); font-size:0.95rem; line-height:1.5; position:relative; z-index:1;">
+        Rules watch the live spa state and fire a push notification when they
+        match. Set a temperature window, a chemistry range, or a watch on the
+        spa's own error codes — and we'll let you know.
+      </p>
+    </section>
+  {/if}
+
+  <ul style="list-style:none; padding:0; margin:0; position:relative; z-index:1;">
     {#each rules as rule, i (rule.id)}
-      <li class="rounded-xl border border-gray-200 dark:border-zinc-800 p-3 bg-white dark:bg-zinc-900 space-y-2">
-        <div class="flex items-center gap-2">
-          <input type="checkbox" bind:checked={rule.enabled} class="w-4 h-4" />
-          <select bind:value={rule.kind} class="bg-transparent border border-gray-300 dark:border-zinc-700 rounded px-2 py-1 text-sm">
+      <li class="card" style="margin-top:18px;">
+        <div class="card-label">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+            <input type="checkbox" bind:checked={rule.enabled} style="accent-color: var(--copper);" />
+            <span style="text-transform:none; letter-spacing:0.04em; color:var(--paper);">
+              {kindLabel(rule.kind)}
+            </span>
+          </label>
+          <span class="stamp">{rule.id}</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr auto; gap:14px; position:relative; z-index:1;">
+          <select
+            bind:value={rule.kind}
+            class="input-mono"
+            style="text-transform:uppercase; letter-spacing:0.14em; font-size:0.66rem;"
+          >
             <option value="error_present">Error present</option>
             <option value="temperature_outside">Temperature outside</option>
             <option value="filter_cycle_missed">Filter cycle missed</option>
             <option value="chemistry_outside">Chemistry outside</option>
           </select>
-          <span class="ml-auto text-xs text-gray-500">{rule.id}</span>
-          <button onclick={() => removeRule(i)} class="text-xs text-red-500 hover:underline">remove</button>
+          <button
+            type="button"
+            class="btn-ghost"
+            onclick={() => removeRule(i)}
+            style="font-size:0.6rem;"
+          >
+            Remove
+          </button>
         </div>
-        <textarea
-          rows="2"
-          value={thresholdText(rule)}
-          oninput={(e) => setThreshold(i, e.currentTarget.value)}
-          class="w-full text-xs font-mono border border-gray-300 dark:border-zinc-700 bg-transparent rounded p-2"
-          placeholder={'{"minF":100,"maxF":105}'}
-        ></textarea>
+
+        <div style="margin-top:14px; position:relative; z-index:1;">
+          <div class="hero-target-label" style="margin-bottom:8px;">Threshold (JSON)</div>
+          <textarea
+            rows="2"
+            value={thresholdText(rule)}
+            oninput={(e) => setThreshold(i, e.currentTarget.value)}
+            class="input-mono"
+            placeholder={'{"minF":100,"maxF":105}'}
+          ></textarea>
+        </div>
       </li>
     {/each}
   </ul>
 
-  <div class="flex items-center gap-3">
-    <button onclick={newRule} class="bg-gray-200 dark:bg-zinc-800 px-3 py-1 rounded text-sm">+ Add rule</button>
-    <button
-      onclick={save}
-      disabled={saving}
-      class="bg-emerald-600 text-white px-3 py-1 rounded text-sm disabled:opacity-50"
-    >
-      Save
+  <div style="display:flex; gap:14px; align-items:center; justify-content:center; margin-top:32px;">
+    <button onclick={newRule} class="btn-ghost">+ Add rule</button>
+    <button onclick={save} disabled={saving} class="btn-primary">
+      {saving ? 'Saving…' : 'Save'}
     </button>
-    {#if savedMsg}<span class="text-sm text-gray-500">{savedMsg}</span>{/if}
+    {#if savedMsg}
+      <span class="hero-target-label">{savedMsg}</span>
+    {/if}
   </div>
+
+  <div class="footer-stamp">push notifications via web push</div>
 </main>
