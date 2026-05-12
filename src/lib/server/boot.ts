@@ -5,7 +5,9 @@ import { createMqttPipeline } from './mqtt';
 import { createStateStore } from './state';
 import { openDb } from './db';
 import { startRollupLoop } from './history';
-import type { AuthenticationSpa } from './types';
+import { evaluateRules } from './alerts';
+import { sendToAll } from './push';
+import type { AlertRule, AuthenticationSpa } from './types';
 
 let started = false;
 
@@ -57,6 +59,48 @@ export function startBackend(): BootResult {
   });
 
   const insertEvent = db.prepare('INSERT INTO events (ts, topic, payload_json) VALUES (?, ?, ?)');
+  const insertAlert = db.prepare(
+    'INSERT INTO alert_event (rule_id, ts, payload_json, delivered) VALUES (?, ?, ?, 0)',
+  );
+  const fetchEnabledRules = db.prepare(
+    'SELECT id, kind, threshold_json, enabled FROM alert_rule WHERE enabled = 1',
+  );
+
+  // Per-rule last-fire timestamp; suppress re-fire within 5 minutes.
+  const ALERT_COOLDOWN_MS = 5 * 60 * 1000;
+  const lastFireByRule = new Map<string, number>();
+
+  state.onChange((s) => {
+    const rows = fetchEnabledRules.all() as {
+      id: string;
+      kind: string;
+      threshold_json: string;
+    }[];
+    if (rows.length === 0) return;
+    const rules: AlertRule[] = rows.map((r) => ({
+      id: r.id,
+      kind: r.kind as AlertRule['kind'],
+      threshold: JSON.parse(r.threshold_json),
+      enabled: true,
+    }));
+    const fires = evaluateRules(rules, s);
+    const now = Date.now();
+    for (const f of fires) {
+      const last = lastFireByRule.get(f.ruleId) ?? 0;
+      if (now - last < ALERT_COOLDOWN_MS) continue;
+      lastFireByRule.set(f.ruleId, now);
+      try {
+        insertAlert.run(f.ruleId, now, JSON.stringify(f.payload));
+      } catch (err) {
+        console.error('[boot] alert insert failed', err);
+      }
+      sendToAll({
+        title: 'Spa alert',
+        body: `${f.ruleId}: ${JSON.stringify(f.payload)}`,
+        tag: f.ruleId,
+      }).catch((err) => console.error('[push]', err));
+    }
+  });
 
   const pipe = createMqttPipeline({
     uuid,
