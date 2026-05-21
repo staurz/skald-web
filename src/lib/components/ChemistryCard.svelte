@@ -2,30 +2,34 @@
   import type { SpaState } from '$lib/server/types';
 
   let { spa }: { spa: SpaState | null } = $props();
+
+  type ChemState = 'ok' | 'low' | 'high' | 'unknown';
+
+  function chemState(v: number | undefined, lo: number, hi: number): ChemState {
+    if (v == null) return 'unknown';
+    if (v < lo) return 'low';
+    if (v > hi) return 'high';
+    return 'ok';
+  }
+
+  function stateWord(s: ChemState) {
+    return { ok: 'in range', low: 'below', high: 'above', unknown: '—' }[s];
+  }
+  function stateColor(s: ChemState) {
+    return s === 'ok' ? 'var(--moss)' : s === 'unknown' ? 'var(--paper-mute)' : 'var(--amber)';
+  }
+  function fmt(n: number | null | undefined, d = 1): string {
+    if (n == null) return '—';
+    return n.toFixed(d).replace('.', ',');
+  }
+
   let c = $derived(spa?.chemistry);
-  let ts = $derived(spa?.ts);
+  let phVal = $derived(c?.ph);
+  let orpVal = $derived(c?.orp);
+  let phState = $derived(chemState(phVal, 7.2, 7.8));
+  let orpState = $derived(chemState(orpVal, 600, 800));
+
   let openTip: 'ph' | 'orp' | null = $state(null);
-
-  function tone(v: number | undefined, lo: number, hi: number): 'good' | 'warn' | 'bad' | 'empty' {
-    if (v == null) return 'empty';
-    if (v < lo - (hi - lo) * 0.15 || v > hi + (hi - lo) * 0.15) return 'bad';
-    if (v < lo || v > hi) return 'warn';
-    return 'good';
-  }
-
-  function relativeStamp(updatedAt?: number): string {
-    if (!updatedAt) return '';
-    const secs = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
-    if (secs < 60) return `SpaBoy · ${secs}s ago`;
-    const mins = Math.floor(secs / 60);
-    if (mins < 60) return `SpaBoy · ${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    return `SpaBoy · ${hrs}h ago`;
-  }
-
-  let phTone = $derived(tone(c?.ph, 7.2, 7.8));
-  let orpTone = $derived(tone(c?.orp, 600, 800));
-  let stamp = $derived(relativeStamp(ts));
 
   function toggleTip(which: 'ph' | 'orp', e: Event) {
     e.stopPropagation();
@@ -46,43 +50,51 @@
 
 <svelte:window onclick={maybeDismiss} onkeydown={onKey} />
 
-<section class="card">
-  <div class="card-label">
-    Water chemistry
-    {#if stamp}<span class="stamp">{stamp}</span>{/if}
+<section class="card anim-rise" style="animation-delay: 320ms;">
+  <div class="head">
+    <span class="head-label">Water chemistry</span>
+    <span class="src">Spa Boy</span>
   </div>
-  <div class="chem-grid">
-    <div class="chem">
-      <div class="chem-name">
-        pH
+
+  <div class="grid">
+    <div class="block">
+      <div class="block-label">
+        <span>pH</span>
         <button
           type="button"
-          class="chem-info"
+          class="info"
           aria-label="What is pH?"
           aria-expanded={openTip === 'ph'}
           onclick={(e) => toggleTip('ph', e)}
-        >
-          i
-        </button>
+        >i</button>
       </div>
-      <div class={`chem-value ${phTone}`}>{c?.ph?.toFixed(2) ?? '—'}</div>
-      <div class="chem-range">7.2 — 7.8</div>
+      <div class="block-value" style="color: {stateColor(phState)};">{fmt(phVal, 1)}</div>
+      <div class="block-state" style="color: {stateColor(phState)};">
+        <span class="state-dot" style="background: {stateColor(phState)};"></span>
+        {stateWord(phState)}
+      </div>
+      <div class="block-range">7,2 — 7,8</div>
     </div>
-    <div class="chem">
-      <div class="chem-name">
-        ORP
+
+    <div class="block">
+      <div class="block-label">
+        <span>ORP</span>
         <button
           type="button"
-          class="chem-info"
+          class="info"
           aria-label="What is ORP?"
           aria-expanded={openTip === 'orp'}
           onclick={(e) => toggleTip('orp', e)}
-        >
-          i
-        </button>
+        >i</button>
       </div>
-      <div class={`chem-value ${orpTone}`}>{c?.orp ?? '—'}<span class="chem-unit">mV</span></div>
-      <div class="chem-range">600 — 800</div>
+      <div class="block-value" style="color: {stateColor(orpState)};">
+        {orpVal ?? '—'}<span class="unit">mV</span>
+      </div>
+      <div class="block-state" style="color: {stateColor(orpState)};">
+        <span class="state-dot" style="background: {stateColor(orpState)};"></span>
+        {stateWord(orpState)}
+      </div>
+      <div class="block-range">600 — 800</div>
     </div>
   </div>
 
@@ -96,8 +108,8 @@
         equipment.
       </p>
 
-      {#if c?.ph != null && c.ph > 7.8}
-        <div class="tip-heading">If high (yours: {c.ph.toFixed(2)})</div>
+      {#if phVal != null && phVal > 7.8}
+        <div class="tip-heading">If high (yours: {phVal.toFixed(2)})</div>
         <ol>
           <li>
             <div>
@@ -112,8 +124,8 @@
             </div>
           </li>
         </ol>
-      {:else if c?.ph != null && c.ph < 7.2}
-        <div class="tip-heading">If low (yours: {c.ph.toFixed(2)})</div>
+      {:else if phVal != null && phVal < 7.2}
+        <div class="tip-heading">If low (yours: {phVal.toFixed(2)})</div>
         <ol>
           <li>
             <div>
@@ -185,3 +197,195 @@
     </div>
   {/if}
 </section>
+
+<style>
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 18px;
+  }
+  .head-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+  }
+  .src {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-variation-settings: 'opsz' 14, 'wght' 400, 'SOFT' 60;
+    font-size: 0.85rem;
+    color: var(--paper-soft);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
+  .block-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+    margin-bottom: 6px;
+  }
+  .info {
+    background: transparent;
+    border: 1px solid var(--paper-faint);
+    color: var(--paper-mute);
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    letter-spacing: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: all 0.3s;
+  }
+  .info:hover,
+  .info[aria-expanded='true'] {
+    color: var(--paper);
+    border-color: var(--copper-dim);
+  }
+  .block-value {
+    font-family: var(--font-display);
+    font-variation-settings: 'opsz' 96, 'wght' 280, 'SOFT' 60;
+    font-size: 2.5rem;
+    line-height: 1;
+    color: var(--paper);
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: baseline;
+  }
+  .unit {
+    font-variation-settings: 'opsz' 40, 'wght' 350, 'SOFT' 50;
+    font-size: 0.9rem;
+    color: var(--paper-mute);
+    margin-left: 6px;
+  }
+  .block-state {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-variation-settings: 'opsz' 14, 'wght' 400, 'SOFT' 60;
+    font-size: 0.85rem;
+  }
+  .state-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+  .block-range {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    color: var(--paper-faint);
+    margin-top: 6px;
+  }
+
+  .chem-tooltip {
+    position: relative;
+    z-index: 2;
+    margin-top: 22px;
+    padding: 20px 22px 22px;
+    border: 1px solid var(--paper-line);
+    border-radius: var(--r-md);
+    background: linear-gradient(180deg, rgba(36, 58, 88, 0.55), rgba(18, 32, 53, 0.85));
+    animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .chem-tooltip h3 {
+    font-family: var(--font-display);
+    font-variation-settings: 'opsz' 24, 'SOFT' 60, 'wght' 500;
+    font-size: 1.1rem;
+    color: var(--paper);
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .chem-tooltip .tip-range {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--paper-faint);
+    margin-bottom: 14px;
+  }
+  .chem-tooltip p {
+    font-family: var(--font-display);
+    font-variation-settings: 'opsz' 14, 'wght' 400;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--paper-soft);
+    margin: 0 0 16px;
+  }
+  .chem-tooltip .tip-heading {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--copper);
+    margin: 0 0 10px;
+  }
+  .chem-tooltip ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: tip;
+  }
+  .chem-tooltip ol li {
+    counter-increment: tip;
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    align-items: baseline;
+    gap: 8px;
+    padding: 8px 0;
+    border-top: 1px solid var(--paper-line);
+  }
+  .chem-tooltip ol li:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .chem-tooltip ol li::before {
+    content: counter(tip, decimal-leading-zero);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--copper);
+    letter-spacing: 0.12em;
+  }
+  .chem-tooltip ol li b {
+    font-family: var(--font-display);
+    font-variation-settings: 'opsz' 14, 'wght' 500;
+    font-size: 0.92rem;
+    color: var(--paper);
+    font-weight: normal;
+  }
+  .chem-tooltip ol li span {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 0.86rem;
+    line-height: 1.45;
+    color: var(--paper-soft);
+    margin-top: 2px;
+  }
+  .chem-tooltip .tip-footer {
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--paper-faint);
+    letter-spacing: 0.06em;
+    line-height: 1.5;
+  }
+</style>

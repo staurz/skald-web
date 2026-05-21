@@ -1,70 +1,144 @@
 <script lang="ts">
-  type Point = { ts_bucket: number; avg: number; min: number; max: number };
+  let {
+    points,
+    target,
+    label = 'TEMPERATURE',
+    height = 200,
+  }: {
+    points: number[];
+    target?: number;
+    label?: string;
+    height?: number;
+  } = $props();
 
-  let { points = [], yLabel = '' }: { points?: Point[]; yLabel?: string } = $props();
+  const W = 320;
 
-  const W = 600;
-  const H = 200;
-  const padX = 12;
-  const padTop = 22;
-  const padBottom = 26;
+  let H = $derived(height);
+  let domain = $derived.by(() => {
+    if (!points?.length) return { min: 30, max: 42 };
+    const lo = Math.min(...points);
+    const hi = Math.max(...points);
+    const pad = Math.max(0.5, (hi - lo) * 0.15);
+    return { min: lo - pad, max: hi + pad };
+  });
 
-  let xs = $derived(points.map((p) => p.ts_bucket));
-  let ys = $derived(points.map((p) => p.avg));
-  let xMin = $derived(xs[0] ?? 0);
-  let xMax = $derived(xs[xs.length - 1] ?? 1);
-  let yMin = $derived(ys.length ? Math.min(...ys) : 0);
-  let yMax = $derived(ys.length ? Math.max(...ys) : 1);
-
-  // Provide vertical headroom so the line doesn't kiss the chart edges.
-  let yLo = $derived(yMin - Math.max((yMax - yMin) * 0.1, 0.5));
-  let yHi = $derived(yMax + Math.max((yMax - yMin) * 0.1, 0.5));
-
-  function fx(x: number) {
-    return padX + ((x - xMin) / Math.max(1, xMax - xMin)) * (W - padX * 2);
+  function pt(i: number, v: number) {
+    const x = (i / Math.max(1, points.length - 1)) * W;
+    const y = H - ((v - domain.min) / (domain.max - domain.min)) * H;
+    return [x, y] as const;
   }
-  function fy(y: number) {
-    return padTop + (H - padTop - padBottom) - ((y - yLo) / Math.max(0.001, yHi - yLo)) * (H - padTop - padBottom);
-  }
 
-  let pathLine = $derived(
-    ys.length ? 'M' + xs.map((x, i) => `${fx(x).toFixed(2)},${fy(ys[i]).toFixed(2)}`).join(' L') : '',
+  let pts = $derived(points.map((v, i) => pt(i, v)));
+
+  let smoothD = $derived(
+    pts.reduce((acc, [x, y], i, arr) => {
+      if (i === 0) return `M ${x} ${y}`;
+      const [px, py] = arr[i - 1];
+      const c1x = px + (x - px) / 2;
+      const c2x = x - (x - px) / 2;
+      return `${acc} C ${c1x} ${py} ${c2x} ${y} ${x} ${y}`;
+    }, '')
   );
-  let pathFill = $derived(
-    ys.length
-      ? `M${fx(xs[0]).toFixed(2)},${(H - padBottom).toFixed(2)} ` +
-          'L' +
-          xs.map((x, i) => `${fx(x).toFixed(2)},${fy(ys[i]).toFixed(2)}`).join(' L') +
-          ` L${fx(xs[xs.length - 1]).toFixed(2)},${(H - padBottom).toFixed(2)} Z`
-      : '',
+
+  let fillD = $derived(`${smoothD} L ${W} ${H} L 0 ${H} Z`);
+
+  let gridLines = $derived.by(() => {
+    const lines: number[] = [];
+    const lo = Math.ceil(domain.min);
+    const hi = Math.floor(domain.max);
+    for (let t = lo; t <= hi; t++) lines.push(t);
+    return lines;
+  });
+
+  let targetY = $derived(
+    target != null ? H - ((target - domain.min) / (domain.max - domain.min)) * H : null
   );
 
-  let lastX = $derived(ys.length ? fx(xs[xs.length - 1]) : 0);
-  let lastY = $derived(ys.length ? fy(ys[ys.length - 1]) : 0);
-
-  function fmtTime(ts: number): string {
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
+  let last = $derived(pts.length > 0 ? pts[pts.length - 1] : null);
 </script>
 
-<div class="spark tall">
-  <svg viewBox="0 0 600 200" preserveAspectRatio="none">
+<div class="chart-wrap">
+  <svg viewBox={`0 0 ${W} ${H + 24}`} preserveAspectRatio="none" aria-label={label}>
     <defs>
-      <linearGradient id="sparkGradient" x1="0" x2="0" y1="0" y2="1">
-        <stop offset="0%" stop-color="#cc7c3a" stop-opacity="0.5" />
-        <stop offset="100%" stop-color="#cc7c3a" stop-opacity="0" />
+      <linearGradient id="glod-history-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--copper)" stop-opacity="0.4" />
+        <stop offset="100%" stop-color="var(--copper)" stop-opacity="0" />
       </linearGradient>
+      <filter id="glod-history-glow">
+        <feGaussianBlur stdDeviation="1.5" />
+      </filter>
     </defs>
-    {#if pathLine}
-      <path class="spark-fill" d={pathFill} />
-      <path class="spark-line" d={pathLine} />
-      <circle class="spark-current" cx={lastX} cy={lastY} r="3" />
-      <text class="spark-axis-label" x={padX} y={H - 8}>{fmtTime(xs[0])}</text>
-      <text class="spark-axis-label" x={W - padX} y={H - 8} text-anchor="end">{fmtTime(xs[xs.length - 1])}</text>
-      <text class="spark-axis-label" x={padX} y="14">{yLabel} {yLo.toFixed(1)}–{yHi.toFixed(1)}</text>
-    {:else}
-      <text x="300" y="105" text-anchor="middle" class="spark-axis-label" style="font-size:11px;">awaiting data</text>
+
+    {#each gridLines as t}
+      {@const y = H - ((t - domain.min) / (domain.max - domain.min)) * H}
+      <line
+        x1="0"
+        x2={W}
+        y1={y}
+        y2={y}
+        stroke="var(--paper-line)"
+        stroke-width="0.5"
+        stroke-dasharray="1 4"
+      />
+      <text
+        x={W - 2}
+        y={y - 3}
+        text-anchor="end"
+        font-family="var(--font-mono)"
+        font-size="9"
+        fill="var(--paper-faint)"
+      >
+        {t}°
+      </text>
+    {/each}
+
+    <path d={fillD} fill="url(#glod-history-fill)" />
+    <path
+      d={smoothD}
+      fill="none"
+      stroke="var(--copper)"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      filter="url(#glod-history-glow)"
+      opacity="0.55"
+    />
+    <path
+      d={smoothD}
+      fill="none"
+      stroke="var(--copper)"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    {#if targetY != null}
+      <line
+        x1="0"
+        x2={W}
+        y1={targetY}
+        y2={targetY}
+        stroke="var(--paper-faint)"
+        stroke-width="0.5"
+        stroke-dasharray="3 4"
+      />
+    {/if}
+
+    {#if last}
+      <circle cx={last[0]} cy={last[1]} r="9" fill="none" stroke="var(--copper)" stroke-width="0.8" opacity="0.4" />
+      <circle cx={last[0]} cy={last[1]} r="4" fill="var(--copper)" />
     {/if}
   </svg>
 </div>
+
+<style>
+  .chart-wrap {
+    width: 100%;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+</style>

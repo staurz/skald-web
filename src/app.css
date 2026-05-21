@@ -905,3 +905,26 @@ body.is-heating::before {
     letter-spacing: -0.045em;
   }
 }
+
+/* =================== GLØD ADDITIONS ===================
+   New shipping-glod components reference --font-display /
+   --font-mono. Aliased to existing --display / --mono so
+   both naming schemes work side-by-side. */
+:root {
+  --font-display: var(--display);
+  --font-mono: var(--mono);
+}
+
+/* Reusable rise / settle / pulse utilities used by new
+   component-scoped styles (TemperatureCard, AlertItem, etc). */
+@media (prefers-reduced-motion: no-preference) {
+  .anim-rise {
+    animation: rise 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .anim-settle {
+    animation: settle 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+.anim-pulse {
+  animation: pulse 2.4s ease-in-out infinite;
+}

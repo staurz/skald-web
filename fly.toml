@@ -1,4 +1,4 @@
-app = "arctic-spa"
+app = "skald"
 primary_region = "arn"
 
 [build]
