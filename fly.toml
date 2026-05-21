@@ -5,6 +5,10 @@ primary_region = "arn"
 
 [env]
   NODE_ENV = "production"
+  # Cap V8's old-space heap below the 256mb cgroup limit so it GCs
+  # instead of getting OOM-killed. Leaves headroom for Node baseline,
+  # new-space, and native modules (better-sqlite3). Raise with memory.
+  NODE_OPTIONS = "--max-old-space-size=160"
 
 [[mounts]]
   source = "data"
@@ -19,4 +23,4 @@ primary_region = "arn"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "256mb"
