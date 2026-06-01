@@ -9,7 +9,9 @@ export type SecretKey =
   | 'ARCTIC_REFRESH_TOKEN'
   | 'INSTALLATION_ID'
   | 'VAPID_PUBLIC_KEY'
-  | 'VAPID_PRIVATE_KEY';
+  | 'VAPID_PRIVATE_KEY'
+  | 'SITE_PASSWORD_HASH'
+  | 'SESSION_SECRET';
 
 export interface SecretsStore {
   get(key: SecretKey): string | null;
