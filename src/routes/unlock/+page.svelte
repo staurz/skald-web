@@ -57,20 +57,44 @@
   }
   h1 {
     margin: 0 0 4px;
-    font-size: 1.2rem;
+    font-family: var(--display);
+    font-variation-settings: 'opsz' 36, 'SOFT' 60, 'wght' 420;
+    font-size: 1.4rem;
+    color: var(--paper);
   }
-  input,
-  button {
+  input {
     padding: 12px 14px;
-    border-radius: var(--radius, 10px);
-    border: 1px solid var(--border, #3334);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--paper-faint);
+    background: rgba(243, 237, 224, 0.06);
+    color: var(--paper);
     font: inherit;
   }
+  input::placeholder {
+    color: var(--paper-mute);
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--copper);
+  }
   button {
+    padding: 12px 14px;
+    border-radius: 999px;
+    border: 0;
+    background: var(--copper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     cursor: pointer;
   }
+  button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   .err {
-    color: var(--danger, #d33);
+    color: var(--rust);
     margin: 0;
     font-size: 0.9rem;
   }
