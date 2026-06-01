@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { MaintenanceTask, TaskInput, RecurrenceKind, IntervalUnit } from '$lib/server/maintenance-types';
+  // SubTask type is carried inside MaintenanceTask.subTasks; no separate import needed.
 
   let tasks = $state<MaintenanceTask[]>([]);
   let title = $state('');
@@ -11,6 +12,41 @@
   let annualMonth = $state(10);
   let annualDay = $state(15);
   let editingId = $state<string | null>(null);
+  let expanded = $state<Record<string, boolean>>({});
+  let newItem = $state<Record<string, string>>({});
+
+  function toggleExpand(id: string) {
+    expanded[id] = !expanded[id];
+  }
+
+  async function addItem(parentId: string) {
+    const t = (newItem[parentId] ?? '').trim();
+    if (!t) return;
+    const r = await fetch(`/api/maintenance/tasks/${parentId}/subtasks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: t }),
+    });
+    if (r.ok) {
+      newItem[parentId] = '';
+      expanded[parentId] = true;
+      await load();
+    }
+  }
+
+  async function toggleSub(subId: string) {
+    await fetch(`/api/maintenance/subtasks/${subId}/toggle`, { method: 'POST' });
+    await load();
+  }
+
+  async function removeSub(subId: string) {
+    await fetch(`/api/maintenance/subtasks/${subId}`, { method: 'DELETE' });
+    await load();
+  }
+
+  function progress(t: MaintenanceTask): string {
+    return `${t.subTasks.filter((s) => s.done).length}/${t.subTasks.length}`;
+  }
 
   async function load() {
     const r = await fetch('/api/maintenance/tasks');
@@ -144,11 +180,34 @@
       <ul>
         {#each section.items as t (t.id)}
           <li class={group(t)}>
-            <button class="check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
-            <span class="title">{t.title}</span>
-            {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
-            <button class="edit" title="Edit" onclick={() => startEdit(t)} aria-label="Edit">✎</button>
-            <button class="del" title="Delete" onclick={() => remove(t.id)} aria-label="Delete">✕</button>
+            <div class="row">
+              {#if t.subTasks.length > 0}
+                <button class="check" title="Expand" onclick={() => toggleExpand(t.id)} aria-label="Expand">{expanded[t.id] ? '▾' : '▸'}</button>
+                <span class="title">{t.title}</span>
+                <span class="count">{progress(t)}</span>
+              {:else}
+                <button class="check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
+                <span class="title">{t.title}</span>
+              {/if}
+              {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
+              <button class="edit" title="Edit" onclick={() => startEdit(t)} aria-label="Edit">✎</button>
+              <button class="del" title="Delete" onclick={() => remove(t.id)} aria-label="Delete">✕</button>
+            </div>
+
+            {#if expanded[t.id] || t.subTasks.length === 0}
+              <div class="items">
+                {#each t.subTasks as s (s.id)}
+                  <label class="item">
+                    <input type="checkbox" checked={s.done} onchange={() => toggleSub(s.id)} />
+                    <span class:done={s.done}>{s.title}</span>
+                    <button class="del small" title="Remove item" onclick={() => removeSub(s.id)} aria-label="Remove item">✕</button>
+                  </label>
+                {/each}
+                <form class="add-item" onsubmit={(e) => { e.preventDefault(); addItem(t.id); }}>
+                  <input placeholder="+ add item…" bind:value={newItem[t.id]} aria-label="New checklist item" />
+                </form>
+              </div>
+            {/if}
           </li>
         {/each}
       </ul>
@@ -169,9 +228,11 @@
   .add input:not([type]) { flex: 1 1 160px; }
   .add button { cursor: pointer; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--card, #1c1c1e0a); }
+  li { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--card, #1c1c1e0a); }
   li.overdue { border-left: 3px solid var(--danger, #d33); }
+  .row { display: flex; align-items: center; gap: 10px; }
   .title { flex: 1; }
+  .count { font-size: 0.8rem; opacity: 0.7; }
   .due { font-size: 0.85rem; opacity: 0.7; }
   .check, .del, .edit { border: none; background: none; cursor: pointer; font-size: 1rem; opacity: 0.7; }
   .check:hover { opacity: 1; color: var(--success, #2a8); }
@@ -179,4 +240,9 @@
   .del:hover { opacity: 1; color: var(--danger, #d33); }
   .cancel { color: inherit; }
   .empty { opacity: 0.6; }
+  .items { margin: 0 0 0 28px; display: flex; flex-direction: column; gap: 6px; }
+  .item { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+  .item span.done { text-decoration: line-through; opacity: 0.5; }
+  .del.small { font-size: 0.8rem; margin-left: auto; }
+  .add-item input { width: 100%; padding: 6px 10px; border-radius: var(--radius, 10px); border: 1px solid var(--border, #3334); font: inherit; }
 </style>
