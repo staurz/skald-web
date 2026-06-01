@@ -125,6 +125,29 @@ On marking a task **complete**, set `last_completed_ts = now`, then:
   strictly after `now` (normally next year). Anchored to the **calendar**, so
   doing seasonal work late does not shift next year's date.
 
+**Day-of-month clamping.** When advancing to a target month that has fewer days
+than the source day-of-month, clamp to the **last valid day** of the target
+month. Applies to both interval-by-month (Jan 31 + 3 months → Apr 30) and annual
+dates (`annual_day = 29, annual_month = 2` → Feb 28 in non-leap years). This is
+a fixed rule, applied consistently everywhere a next date is computed.
+
+### Date resolution, timezone, and reminder time
+
+A dated task carries a calendar intent ("due Oct 15"), but `due_ts` is a concrete
+epoch-ms instant. Resolving one to the other needs a timezone and a time of day,
+both of which are fixed app-wide (single-user app):
+
+- **Timezone** — a single configured zone, from a `TIMEZONE` secret/env var
+  (e.g. `Europe/Oslo`), defaulting to that if unset. All calendar math (interval
+  month advancement, annual anchors, "due Oct 15") resolves in this zone, not the
+  server's UTC. This keeps reminders on the correct calendar day regardless of
+  where the Fly machine runs.
+- **Reminder time of day** — dated tasks resolve to **09:00 local** by default,
+  so a task "due Oct 15" produces a `due_ts` at 09:00 `TIMEZONE` on Oct 15. The
+  hourly scheduler then fires the push on the first tick at/after that instant —
+  i.e. around 9am local, never the middle of the night. (A per-task reminder
+  hour is a possible later refinement; v1 uses the single default.)
+
 ### Reminder scheduler
 
 A new background loop registered in `startBackend()`, running **hourly**
@@ -243,7 +266,9 @@ Mirror the existing test style (`vitest`):
 
 - **Unit — next-due logic** (the highest-value target): interval day/week/month
   advancement, annual roll-to-next-year, late-completion behavior for both
-  anchored-to-completion and anchored-to-calendar, `once` archival.
+  anchored-to-completion and anchored-to-calendar, `once` archival,
+  day-of-month clamping (Jan 31 + 3mo → Apr 30; Feb 29 → Feb 28 non-leap), and
+  timezone resolution (a "due Oct 15" task lands at 09:00 in `TIMEZONE`, not UTC).
 - **Unit — scheduler selection**: due vs not-due, undated TODOs excluded,
   de-dupe guard prevents repeat pushes within a cycle (inject a fake `sendToAll`).
 - **API**: create/list/update/delete/complete round-trips against a temp DB.
