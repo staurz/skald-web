@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { json, error } from '@sveltejs/kit';
 import { authenticate, grantToken, spaUuidFromJwt } from '$lib/server/arctic-auth';
 import { defaultSecrets } from '$lib/server/secrets';
+import { hashPassword } from '$lib/server/access';
 
 function getOrCreateInstallationId(): string {
   let id = defaultSecrets.get('INSTALLATION_ID');
@@ -14,7 +15,7 @@ function getOrCreateInstallationId(): string {
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-  const { username, password } = await request.json() as { username: string; password: string };
+  const { username, password, sitePassword } = await request.json() as { username: string; password: string; sitePassword?: string };
   if (!username || !password) throw error(400, 'username and password required');
 
   let stage = 'authenticate';
@@ -41,6 +42,10 @@ export const POST: RequestHandler = async ({ request }) => {
     defaultSecrets.set('ARCTIC_SPA_UUID', spaUuid);
     defaultSecrets.set('ARCTIC_PASSWORD_HASH', auth.passwordHash);
     defaultSecrets.set('ARCTIC_REFRESH_TOKEN', token.refresh_token);
+
+    if (typeof sitePassword === 'string' && sitePassword.length > 0) {
+      defaultSecrets.set('SITE_PASSWORD_HASH', hashPassword(sitePassword));
+    }
 
     return json({
       ok: true,
