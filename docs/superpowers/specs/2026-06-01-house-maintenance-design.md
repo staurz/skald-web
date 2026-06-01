@@ -29,6 +29,8 @@ SQLite database, web-push setup, design system, and background-loop pattern.
 - Auto-scheduling: completing a recurring task computes its next due date.
 - A **Tasks** section in the app, alongside the existing spa pages, under a
   rebranded neutral "home app" shell.
+- **Site-wide password protection** — a single dedicated access password gates
+  the whole app, enforced server-side, remembered indefinitely per device.
 
 ## Non-goals (v1 — deferred to later iterations)
 
@@ -66,6 +68,12 @@ New code:
   `api/alerts/rules`).
 - `src/routes/tasks/+page.svelte` — the Tasks UI.
 - TabBar gains a **Tasks** entry; shell rebranded to a neutral home app.
+- `src/lib/server/access.ts` — password hashing/verification + cookie
+  signing/verification (see Access protection).
+- `src/routes/unlock/+page.svelte` and `src/routes/api/unlock/+server.ts` — the
+  unlock screen and its verify endpoint.
+- `src/hooks.server.ts` — extended `handle` to enforce the access gate on every
+  request.
 
 ## Data model
 
@@ -165,6 +173,62 @@ source of truth for what a valid task is.
 - The app shell is rebranded from spa-specific to a neutral home identity; spa
   and maintenance are co-equal sections.
 
+## Access protection
+
+The app currently has **no access gate**: `+layout.server.ts` only redirects to
+`/setup` when unconfigured; once set up, the URL is open to anyone. v1 adds a
+single shared **dedicated access password** (separate from the Arctic account
+credential), enforced server-side and remembered per device.
+
+### Secrets
+
+Two new keys in the secrets store (`SecretKey` union in `secrets.ts`):
+
+- `SITE_PASSWORD_HASH` — hash of the dedicated access password. Hashed with
+  `node:crypto` `scrypt` (no new dependency): a random per-password salt, stored
+  as `salt:derivedKey`. Verified with `timingSafeEqual`.
+- `SESSION_SECRET` — random key used to sign the unlock cookie. Generated once
+  (`crypto.randomBytes`) on first need and persisted, so cookies survive
+  restarts.
+
+The access password is set during `/setup` (a new field) and can also be
+provided via the `SITE_PASSWORD_HASH` env var on Fly.
+
+### Cookie (the "remembered indefinitely" mechanism)
+
+On successful unlock, set one cookie:
+
+- Value: an HMAC signature over a fixed token, keyed by `SESSION_SECRET` (so it
+  can't be forged without the server secret). No personal data in the cookie.
+- Attributes: `HttpOnly` (JS can't read it → XSS-safe), `Secure`,
+  `SameSite=Lax`, `Path=/`, `Max-Age` ≈ 10 years (effectively indefinite).
+
+A signed `HttpOnly` cookie is chosen over `localStorage` deliberately: the gate
+must hold for SSR pages, `/api/*`, and the SSE stream, all of which are
+server-side. `localStorage` is never sent to the server, so a client-only check
+would leave every server route open — security theater. The user experience is
+identical: enter the password once per device, never again.
+
+### Enforcement
+
+Extend the `handle` hook in `hooks.server.ts`:
+
+1. Allowlist (always pass through): the unlock route (`/unlock`,
+   `/api/unlock`), the setup route (`/setup`, `/api/setup`), and static assets
+   (`/_app/`, service worker, manifest, icons, favicon).
+2. If `SITE_PASSWORD_HASH` is not set yet, the gate is inactive (so the device
+   can reach `/setup` to establish it).
+3. Otherwise, read and verify the signed cookie. Valid → continue. Invalid or
+   missing → `307` redirect to `/unlock` for page requests, `401` for `/api/*`.
+
+### Unlock flow
+
+`/unlock` renders a single password field → `POST /api/unlock` with the
+password → server verifies against `SITE_PASSWORD_HASH` with `timingSafeEqual`
+→ on success sets the signed cookie and redirects to `/`; on failure returns a
+friendly "wrong password" error. No lockout/rate-limit in v1 (single user,
+low-value target); can be added later if desired.
+
 ## Error handling
 
 - Follow the existing loops' pattern: wrap each scheduler tick in try/catch and
@@ -183,6 +247,10 @@ Mirror the existing test style (`vitest`):
 - **Unit — scheduler selection**: due vs not-due, undated TODOs excluded,
   de-dupe guard prevents repeat pushes within a cycle (inject a fake `sendToAll`).
 - **API**: create/list/update/delete/complete round-trips against a temp DB.
+- **Access**: scrypt hash round-trips (correct password verifies, wrong fails),
+  cookie sign/verify (a tampered cookie is rejected), and the hook gating
+  (no cookie → redirect/401; valid cookie → pass; allowlisted routes always
+  pass; gate inactive when no password is set).
 
 ## Future iterations (context, not v1 scope)
 
