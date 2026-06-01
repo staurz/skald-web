@@ -65,9 +65,23 @@ CREATE TABLE IF NOT EXISTS maintenance_task (
   due_ts INTEGER,
   last_completed_ts INTEGER,
   last_reminded_ts INTEGER,
-  enabled INTEGER NOT NULL DEFAULT 1
+  enabled INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  -- Descriptive metadata (added later; see MAINTENANCE_TASK_COLUMNS migration below).
+  description TEXT,
+  category TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  priority TEXT,
+  season TEXT,
+  estimated_minutes INTEGER,
+  cost_estimate TEXT,
+  seed_key TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_task_due ON maintenance_task(due_ts);
+-- NOTE: the unique index on seed_key is created in migrate(), NOT here. On an
+-- existing DB the CREATE TABLE above is a no-op, so seed_key is only present
+-- after migrate()'s ALTER TABLE runs; indexing it here would throw
+-- "no such column: seed_key" before the column exists.
 
 CREATE TABLE IF NOT EXISTS sub_task (
   id TEXT PRIMARY KEY,
@@ -80,6 +94,50 @@ CREATE TABLE IF NOT EXISTS sub_task (
 CREATE INDEX IF NOT EXISTS idx_sub_task_parent ON sub_task(parent_id);
 `;
 
+// Descriptive columns added to maintenance_task after its first release. The
+// SCHEMA above declares them for fresh DBs; this list back-fills any existing
+// database via ALTER TABLE. SQLite cannot add a column with a UNIQUE constraint,
+// so seed_key is added plain here and made unique by the index created below —
+// AFTER the ALTER, which is why the index must not live in SCHEMA.
+// Keep this in sync with the table definition above.
+const MAINTENANCE_TASK_COLUMNS: Record<string, string> = {
+  sort_order: 'INTEGER NOT NULL DEFAULT 0',
+  description: 'TEXT',
+  category: 'TEXT',
+  source: "TEXT NOT NULL DEFAULT 'manual'",
+  priority: 'TEXT',
+  season: 'TEXT',
+  estimated_minutes: 'INTEGER',
+  cost_estimate: 'TEXT',
+  seed_key: 'TEXT',
+};
+
+function migrate(db: Database.Database): void {
+  const existing = new Set(
+    (db.prepare(`PRAGMA table_info(maintenance_task)`).all() as { name: string }[]).map((c) => c.name),
+  );
+  const sortOrderWasMissing = !existing.has('sort_order');
+  for (const [name, decl] of Object.entries(MAINTENANCE_TASK_COLUMNS)) {
+    if (!existing.has(name)) {
+      db.exec(`ALTER TABLE maintenance_task ADD COLUMN ${name} ${decl}`);
+    }
+  }
+  // First time sort_order appears on an existing DB, seed it in the previous
+  // display order (due asc, undated last) so nothing visually jumps.
+  if (sortOrderWasMissing) {
+    const rows = db
+      .prepare(`SELECT id FROM maintenance_task ORDER BY due_ts IS NULL, due_ts ASC, rowid ASC`)
+      .all() as { id: string }[];
+    const upd = db.prepare(`UPDATE maintenance_task SET sort_order = ? WHERE id = ?`);
+    const tx = db.transaction((list: { id: string }[]) => {
+      list.forEach((r, i) => upd.run(i, r.id));
+    });
+    tx(rows);
+  }
+  // Safe to (re)create after the column exists; no-op once present.
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_task_seed_key ON maintenance_task(seed_key)`);
+}
+
 let cached: Database.Database | null = null;
 
 export function openDb(path?: string): Database.Database {
@@ -90,6 +148,7 @@ export function openDb(path?: string): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   if (!path) cached = db;
   return db;
 }

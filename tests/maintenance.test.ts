@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import Database from 'better-sqlite3';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,40 @@ function tempDb() {
 }
 
 describe('maintenance_task schema', () => {
+  // Regression: openDb must migrate a database created BEFORE the descriptive
+  // columns existed. The old-shape table makes CREATE TABLE IF NOT EXISTS a
+  // no-op, so the seed_key column (and its unique index) must be added by
+  // migrate() — never indexed inside SCHEMA, or openDb throws
+  // "no such column: seed_key" on every existing install.
+  it('migrates a pre-existing old-shape database without throwing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'maint-old-'));
+    const path = join(dir, 'old.db');
+    const raw = new Database(path);
+    raw.exec(`CREATE TABLE maintenance_task (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, notes TEXT, recurrence_kind TEXT NOT NULL,
+      interval_value INTEGER, interval_unit TEXT, annual_month INTEGER, annual_day INTEGER,
+      due_ts INTEGER, last_completed_ts INTEGER, last_reminded_ts INTEGER, enabled INTEGER NOT NULL DEFAULT 1
+    )`);
+    raw.prepare(`INSERT INTO maintenance_task (id, title, recurrence_kind, enabled) VALUES (?, ?, ?, 1)`).run(
+      'legacy-1',
+      'Gammel oppgave',
+      'once',
+    );
+    raw.close();
+
+    // Must not throw, and must end up with the new columns + the unique index.
+    const db = openDb(path);
+    const cols = (db.prepare(`PRAGMA table_info(maintenance_task)`).all() as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain('seed_key');
+    expect(cols).toContain('source');
+    const idx = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name='idx_task_seed_key'`)
+      .get();
+    expect(idx).toBeTruthy();
+    // The legacy row survives and listing works.
+    expect(listTasks(db)).toHaveLength(1);
+  });
+
   it('creates the table with the expected columns', () => {
     const db = tempDb();
     const cols = db.prepare(`PRAGMA table_info(maintenance_task)`).all() as { name: string }[];
@@ -27,15 +62,24 @@ describe('maintenance_task schema', () => {
       [
         'annual_day',
         'annual_month',
+        'category',
+        'cost_estimate',
+        'description',
         'due_ts',
         'enabled',
+        'estimated_minutes',
         'id',
         'interval_unit',
         'interval_value',
         'last_completed_ts',
         'last_reminded_ts',
         'notes',
+        'priority',
         'recurrence_kind',
+        'season',
+        'seed_key',
+        'sort_order',
+        'source',
         'title',
       ].sort(),
     );
