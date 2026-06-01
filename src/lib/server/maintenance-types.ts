@@ -14,6 +14,15 @@ export interface MaintenanceTask {
   lastCompletedTs: number | null;
   lastRemindedTs: number | null;
   enabled: boolean;
+  subTasks: SubTask[];
+}
+
+export interface SubTask {
+  id: string;
+  parentId: string;
+  title: string;
+  done: boolean;
+  sortOrder: number;
 }
 
 // Fields accepted when creating/editing a task. dueTs is derived server-side.

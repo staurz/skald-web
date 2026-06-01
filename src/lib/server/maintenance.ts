@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { computeInitialDue, nextDueAfterComplete } from './recurrence';
-import type { MaintenanceTask, TaskInput } from './maintenance-types';
+import type { MaintenanceTask, SubTask, TaskInput } from './maintenance-types';
 
 export const TZ = process.env.TIMEZONE ?? 'Europe/Oslo';
 
@@ -34,12 +34,32 @@ function toTask(r: Row): MaintenanceTask {
     lastCompletedTs: r.last_completed_ts,
     lastRemindedTs: r.last_reminded_ts,
     enabled: !!r.enabled,
+    subTasks: [],
   };
 }
 
 const SELECT = `SELECT id, title, notes, recurrence_kind, interval_value, interval_unit,
   annual_month, annual_day, due_ts, last_completed_ts, last_reminded_ts, enabled
   FROM maintenance_task`;
+
+interface SubRow {
+  id: string;
+  parent_id: string;
+  title: string;
+  done: number;
+  sort_order: number;
+}
+
+function toSub(r: SubRow): SubTask {
+  return { id: r.id, parentId: r.parent_id, title: r.title, done: !!r.done, sortOrder: r.sort_order };
+}
+
+const SUB_SELECT = 'SELECT id, parent_id, title, done, sort_order FROM sub_task';
+
+export function getSubTask(db: Database.Database, id: string): SubTask | null {
+  const r = db.prepare(`${SUB_SELECT} WHERE id = ?`).get(id) as SubRow | undefined;
+  return r ? toSub(r) : null;
+}
 
 export function createTask(db: Database.Database, input: TaskInput, now: number): MaintenanceTask {
   const id = randomUUID();
@@ -68,9 +88,19 @@ export function getTask(db: Database.Database, id: string): MaintenanceTask | nu
 }
 
 // Active list: enabled tasks only (completed once-tasks are disabled = archived).
+// Each task carries its checklist of sub-tasks (empty for plain tasks).
 export function listTasks(db: Database.Database): MaintenanceTask[] {
   const rows = db.prepare(`${SELECT} WHERE enabled = 1 ORDER BY due_ts IS NULL, due_ts ASC`).all() as Row[];
-  return rows.map(toTask);
+  const tasks = rows.map(toTask);
+  const subs = db.prepare(`${SUB_SELECT} ORDER BY sort_order ASC, rowid ASC`).all() as SubRow[];
+  const byParent = new Map<string, SubTask[]>();
+  for (const s of subs) {
+    const arr = byParent.get(s.parent_id) ?? [];
+    arr.push(toSub(s));
+    byParent.set(s.parent_id, arr);
+  }
+  for (const t of tasks) t.subTasks = byParent.get(t.id) ?? [];
+  return tasks;
 }
 
 export function updateTask(db: Database.Database, id: string, input: TaskInput, now: number): MaintenanceTask | null {
@@ -94,7 +124,50 @@ export function updateTask(db: Database.Database, id: string, input: TaskInput, 
 }
 
 export function deleteTask(db: Database.Database, id: string): void {
+  db.prepare('DELETE FROM sub_task WHERE parent_id = ?').run(id);
   db.prepare('DELETE FROM maintenance_task WHERE id = ?').run(id);
+}
+
+export function addSubTask(db: Database.Database, parentId: string, title: string): SubTask | null {
+  if (!getTask(db, parentId)) return null;
+  const id = randomUUID();
+  const { n } = db
+    .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM sub_task WHERE parent_id = ?')
+    .get(parentId) as { n: number };
+  db.prepare('INSERT INTO sub_task (id, parent_id, title, done, sort_order) VALUES (?, ?, ?, 0, ?)').run(
+    id,
+    parentId,
+    title,
+    n,
+  );
+  return getSubTask(db, id);
+}
+
+export function deleteSubTask(db: Database.Database, subId: string): void {
+  db.prepare('DELETE FROM sub_task WHERE id = ?').run(subId);
+}
+
+// Flip a sub-task's done state. When every sibling becomes done, the parent
+// happening auto-completes (reschedule or archive); a still-active recurring
+// parent gets its checklist reset for the next occurrence.
+export function toggleSubTask(db: Database.Database, subId: string, now: number): { completed: boolean } {
+  const sub = getSubTask(db, subId);
+  if (!sub) return { completed: false };
+  db.prepare('UPDATE sub_task SET done = ? WHERE id = ?').run(sub.done ? 0 : 1, subId);
+
+  const { total, doneCount } = db
+    .prepare('SELECT COUNT(*) AS total, COALESCE(SUM(done), 0) AS doneCount FROM sub_task WHERE parent_id = ?')
+    .get(sub.parentId) as { total: number; doneCount: number };
+
+  if (total > 0 && doneCount === total) {
+    completeTask(db, sub.parentId, now);
+    const parent = getTask(db, sub.parentId);
+    if (parent && parent.enabled) {
+      db.prepare('UPDATE sub_task SET done = 0 WHERE parent_id = ?').run(sub.parentId);
+    }
+    return { completed: true };
+  }
+  return { completed: false };
 }
 
 export function completeTask(db: Database.Database, id: string, now: number): MaintenanceTask | null {

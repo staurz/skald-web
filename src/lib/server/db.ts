@@ -68,6 +68,16 @@ CREATE TABLE IF NOT EXISTS maintenance_task (
   enabled INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_task_due ON maintenance_task(due_ts);
+
+CREATE TABLE IF NOT EXISTS sub_task (
+  id TEXT PRIMARY KEY,
+  parent_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  done INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (parent_id) REFERENCES maintenance_task(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_sub_task_parent ON sub_task(parent_id);
 `;
 
 let cached: Database.Database | null = null;
@@ -78,6 +88,7 @@ export function openDb(path?: string): Database.Database {
   mkdirSync(dirname(target), { recursive: true });
   const db = new Database(target);
   db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
   if (!path) cached = db;
   return db;
