@@ -248,6 +248,9 @@
   }
   .add input::placeholder { color: var(--paper-mute); }
   .add input:focus, .add select:focus { outline: none; border-color: var(--copper); }
+  /* Native dropdown list: the popped-open options use their own background,
+     so give them a solid dark surface + cream text for readable contrast. */
+  .add select option { background: var(--ink-2); color: var(--paper); }
   .add input:not([type]) { flex: 1 1 160px; }
   .add button {
     padding: 10px 18px;
