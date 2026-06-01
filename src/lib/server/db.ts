@@ -52,6 +52,22 @@ CREATE TABLE IF NOT EXISTS push_subscription (
   auth TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS maintenance_task (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  notes TEXT,
+  recurrence_kind TEXT NOT NULL,
+  interval_value INTEGER,
+  interval_unit TEXT,
+  annual_month INTEGER,
+  annual_day INTEGER,
+  due_ts INTEGER,
+  last_completed_ts INTEGER,
+  last_reminded_ts INTEGER,
+  enabled INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_task_due ON maintenance_task(due_ts);
 `;
 
 let cached: Database.Database | null = null;
