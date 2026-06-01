@@ -18,7 +18,7 @@
 
   // Slide between primary tabs based on order. Same-tab sub-routes
   // (e.g., /alerts ↔ /alerts/rules) don't animate.
-  const tabOrder = ['/', '/history', '/alerts'];
+  const tabOrder = ['/', '/history', '/alerts', '/tasks'];
   const SLIDE_MS = 240;
   const SLIDE_PX = 80;
 
@@ -51,8 +51,8 @@
 </script>
 
 <header class="topbar anim-rise">
-  <a class="mark" href="/" aria-label="Skålda — home">
-    <span class="mark-text">Skålda</span>
+  <a class="mark" href="/" aria-label="Home">
+    <span class="mark-text">Home</span>
     <span class="mark-dot"></span>
   </a>
 </header>

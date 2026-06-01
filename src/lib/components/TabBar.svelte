@@ -5,6 +5,7 @@
     { path: '/',        label: 'Now',     icon: 'now' },
     { path: '/history', label: 'History', icon: 'history' },
     { path: '/alerts',  label: 'Alerts',  icon: 'alerts' },
+    { path: '/tasks',   label: 'Tasks',   icon: 'tasks' },
   ] as const;
 
   let active = $derived(($page.url.pathname === '/' ? '/' : '/' + $page.url.pathname.split('/')[1]));
@@ -25,6 +26,9 @@
               <circle cx="9" cy="9" r="6.5" />
             {:else if t.icon === 'history'}
               <path d="M2.5 13 L6.5 8 L10 11 L15.5 4" />
+            {:else if t.icon === 'tasks'}
+              <path d="M5 9.5l2.5 2.5L13 6" />
+              <path d="M16.5 3.5h-11A2 2 0 0 0 3.5 5.5v9A2 2 0 0 0 5.5 16.5h9A2 2 0 0 0 16.5 14.5v-5" />
             {:else}
               <path d="M9 3 L9 11" />
               <circle cx="9" cy="14.5" r="0.6" fill="currentColor" stroke="none" />
