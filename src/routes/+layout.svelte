@@ -130,12 +130,12 @@
   .app {
     max-width: 640px;
     margin: 0 auto;
-    padding: 8px 22px 0;
+    padding: 8px 22px calc(100px + env(safe-area-inset-bottom));
   }
   @media (min-width: 768px) {
     .app {
       max-width: 1120px;
-      padding: 24px 32px 0;
+      padding: 24px 32px calc(100px + env(safe-area-inset-bottom));
     }
   }
 </style>
