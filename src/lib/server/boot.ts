@@ -7,6 +7,7 @@ import { openDb } from './db';
 import { startRollupLoop } from './history';
 import { evaluateRules } from './alerts';
 import { sendToAll } from './push';
+import { selectDueTasks, markReminded } from './maintenance';
 import type { AlertRule, AuthenticationSpa } from './types';
 
 let started = false;
@@ -120,6 +121,23 @@ export function startBackend(): BootResult {
       startRollupLoop(db);
       ready = true;
       console.log('[boot] MQTT started');
+
+      const HOUR_MS = 60 * 60 * 1000;
+      setInterval(() => {
+        try {
+          const db = openDb();
+          const now = Date.now();
+          const due = selectDueTasks(db, now);
+          for (const t of due) {
+            sendToAll({ title: 'Task due', body: t.title, tag: `task:${t.id}` }).catch((err) =>
+              console.error('[maintenance] push failed', err),
+            );
+            markReminded(db, t.id, now);
+          }
+        } catch (err) {
+          console.error('[maintenance] reminder loop failed', err);
+        }
+      }, HOUR_MS);
 
       // Poll often so the auth manager's natural caching (75% of expires_in)
       // controls rotation; without this, an expired JWT triggers an MQTT
