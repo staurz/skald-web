@@ -15,6 +15,18 @@
   let expanded = $state<Record<string, boolean>>({});
   let newItem = $state<Record<string, string>>({});
 
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  // Days available for the chosen month (Feb shown as 29 so leap-year dates work;
+  // the backend clamps non-leap Feb 29 down to the 28th).
+  const MONTH_LENGTHS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let daysInMonth = $derived(MONTH_LENGTHS[annualMonth - 1]);
+  $effect(() => {
+    if (annualDay > daysInMonth) annualDay = daysInMonth;
+  });
+
   function toggleExpand(id: string) {
     expanded[id] = !expanded[id];
   }
@@ -46,6 +58,26 @@
 
   function progress(t: MaintenanceTask): string {
     return `${t.subTasks.filter((s) => s.done).length}/${t.subTasks.length}`;
+  }
+
+  // Split a "Hva:/Hvorfor:/Hvordan:" description into labelled parts. Lines
+  // without a recognised label render as plain text.
+  type DescPart = { label: string; text: string };
+  const DESC_LABELS = ['Hva', 'Hvorfor', 'Hvordan'];
+  function parseDesc(d: string | null): DescPart[] {
+    if (!d) return [];
+    return d.split('\n').map((line) => {
+      const i = line.indexOf(':');
+      const label = i > 0 ? line.slice(0, i).trim() : '';
+      return DESC_LABELS.includes(label)
+        ? { label, text: line.slice(i + 1).trim() }
+        : { label: '', text: line };
+    });
+  }
+
+  // A task is expandable if it has detail to show (a description or a checklist).
+  function hasDetail(t: MaintenanceTask): boolean {
+    return !!(t.description && t.description.trim()) || t.subTasks.length > 0;
   }
 
   async function load() {
@@ -164,8 +196,13 @@
       </select>
       <input type="date" bind:value={firstDueDate} aria-label="First due date (optional)" />
     {:else}
-      <input type="number" min="1" max="12" bind:value={annualMonth} aria-label="Month" />
-      <input type="number" min="1" max="31" bind:value={annualDay} aria-label="Day" />
+      <span class="when">Every year on</span>
+      <select class="date-part" bind:value={annualMonth} aria-label="Month">
+        {#each MONTHS as name, i}<option value={i + 1}>{name}</option>{/each}
+      </select>
+      <select class="date-part" bind:value={annualDay} aria-label="Day">
+        {#each Array(daysInMonth) as _, i}<option value={i + 1}>{i + 1}</option>{/each}
+      </select>
     {/if}
 
     <button type="submit">{editingId ? 'Save' : 'Add'}</button>
@@ -181,31 +218,49 @@
         {#each section.items as t (t.id)}
           <li class={group(t)}>
             <div class="row">
-              {#if t.subTasks.length > 0}
-                <button class="check" title="Expand" onclick={() => toggleExpand(t.id)} aria-label="Expand">{expanded[t.id] ? '▾' : '▸'}</button>
-                <span class="title">{t.title}</span>
-                <span class="count">{progress(t)}</span>
+              {#if hasDetail(t)}
+                <button class="check chev" title="Show details" onclick={() => toggleExpand(t.id)} aria-label="Show details" aria-expanded={!!expanded[t.id]}>{expanded[t.id] ? '▾' : '▸'}</button>
               {:else}
                 <button class="check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
-                <span class="title">{t.title}</span>
               {/if}
+              <span class="title">{t.title}</span>
+              {#if t.subTasks.length > 0}<span class="count">{progress(t)}</span>{/if}
               {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
+              {#if t.subTasks.length === 0 && hasDetail(t)}
+                <button class="edit done-btn" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
+              {/if}
               <button class="edit" title="Edit" onclick={() => startEdit(t)} aria-label="Edit">✎</button>
               <button class="del" title="Delete" onclick={() => remove(t.id)} aria-label="Delete">✕</button>
             </div>
 
-            {#if expanded[t.id] || t.subTasks.length === 0}
-              <div class="items">
-                {#each t.subTasks as s (s.id)}
-                  <label class="item">
-                    <input type="checkbox" checked={s.done} onchange={() => toggleSub(s.id)} />
-                    <span class:done={s.done}>{s.title}</span>
-                    <button class="del small" title="Remove item" onclick={() => removeSub(s.id)} aria-label="Remove item">✕</button>
-                  </label>
-                {/each}
-                <form class="add-item" onsubmit={(e) => { e.preventDefault(); addItem(t.id); }}>
-                  <input placeholder="+ add item…" bind:value={newItem[t.id]} aria-label="New checklist item" />
-                </form>
+            {#if expanded[t.id] && hasDetail(t)}
+              <div class="detail">
+                {#if t.description}
+                  <div class="desc">
+                    {#each parseDesc(t.description) as part}
+                      {#if part.label}
+                        <div class="dl"><span class="dt">{part.label}</span><span class="dd">{part.text}</span></div>
+                      {:else}
+                        <p class="dp">{part.text}</p>
+                      {/if}
+                    {/each}
+                  </div>
+                {/if}
+
+                {#if t.subTasks.length > 0}
+                  <div class="items">
+                    {#each t.subTasks as s (s.id)}
+                      <label class="item">
+                        <input type="checkbox" checked={s.done} onchange={() => toggleSub(s.id)} />
+                        <span class:done={s.done}>{s.title}</span>
+                        <button class="del small" title="Remove item" onclick={() => removeSub(s.id)} aria-label="Remove item">✕</button>
+                      </label>
+                    {/each}
+                    <form class="add-item" onsubmit={(e) => { e.preventDefault(); addItem(t.id); }}>
+                      <input placeholder="+ add item…" bind:value={newItem[t.id]} aria-label="New checklist item" />
+                    </form>
+                  </div>
+                {/if}
               </div>
             {/if}
           </li>
@@ -245,6 +300,14 @@
     background: rgba(243, 237, 224, 0.06);
     color: var(--paper);
     font: inherit;
+  }
+  .when {
+    align-self: center;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
   }
   .add input::placeholder { color: var(--paper-mute); }
   .add input:focus, .add select:focus { outline: none; border-color: var(--copper); }
@@ -299,7 +362,29 @@
   .del:hover { color: var(--rust); }
   .empty { color: var(--paper-mute); }
 
-  .items { margin: 2px 0 0 26px; display: flex; flex-direction: column; gap: 9px; }
+  .chev { font-size: 0.9rem; }
+  .done-btn:hover { color: var(--moss); }
+
+  .detail { margin: 2px 0 0 26px; display: flex; flex-direction: column; gap: 12px; }
+  .desc { display: flex; flex-direction: column; gap: 7px; }
+  .dl {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .dt {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--copper);
+    padding-top: 2px;
+  }
+  .dd { font-size: 0.88rem; line-height: 1.45; color: var(--paper-soft); }
+  .dp { margin: 0; font-size: 0.88rem; line-height: 1.45; color: var(--paper-soft); }
+
+  .items { display: flex; flex-direction: column; gap: 9px; }
   .item { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; color: var(--paper); }
   .item input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--copper); flex-shrink: 0; }
   .item span.done { text-decoration: line-through; color: var(--paper-mute); }
