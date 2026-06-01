@@ -137,7 +137,7 @@
   h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; margin: 0 0 6px; }
   .add { display: flex; flex-wrap: wrap; gap: 8px; }
   .add input, .add select, .add button { padding: 10px 12px; border-radius: var(--radius, 10px); border: 1px solid var(--border, #3334); font: inherit; }
-  .add input[type='text'], .add input:not([type]) { flex: 1 1 160px; }
+  .add input:not([type]) { flex: 1 1 160px; }
   .add button { cursor: pointer; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--card, #1c1c1e0a); }
