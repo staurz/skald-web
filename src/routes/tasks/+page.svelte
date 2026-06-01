@@ -10,6 +10,7 @@
   let intervalUnit = $state<IntervalUnit>('month');
   let annualMonth = $state(10);
   let annualDay = $state(15);
+  let editingId = $state<string | null>(null);
 
   async function load() {
     const r = await fetch('/api/maintenance/tasks');
@@ -32,17 +33,41 @@
     return base;
   }
 
-  async function add(e: SubmitEvent) {
+  function resetForm() {
+    editingId = null;
+    title = '';
+    kind = 'once';
+    firstDueDate = '';
+    intervalValue = 3;
+    intervalUnit = 'month';
+    annualMonth = 10;
+    annualDay = 15;
+  }
+
+  function startEdit(t: MaintenanceTask) {
+    editingId = t.id;
+    title = t.title;
+    kind = t.recurrenceKind;
+    intervalValue = t.intervalValue ?? 3;
+    intervalUnit = t.intervalUnit ?? 'month';
+    annualMonth = t.annualMonth ?? 10;
+    annualDay = t.annualDay ?? 15;
+    // Prefill the date field from the stored due timestamp (YYYY-MM-DD).
+    firstDueDate = t.dueTs === null ? '' : new Date(t.dueTs).toISOString().slice(0, 10);
+  }
+
+  async function save(e: SubmitEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    const r = await fetch('/api/maintenance/tasks', {
-      method: 'POST',
+    const url = editingId ? `/api/maintenance/tasks/${editingId}` : '/api/maintenance/tasks';
+    const method = editingId ? 'PUT' : 'POST';
+    const r = await fetch(url, {
+      method,
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(buildInput()),
     });
     if (r.ok) {
-      title = '';
-      firstDueDate = '';
+      resetForm();
       await load();
     }
   }
@@ -84,7 +109,7 @@
 <main class="tasks">
   <h1>Tasks</h1>
 
-  <form class="add" onsubmit={add}>
+  <form class="add" onsubmit={save}>
     <input placeholder="New task…" bind:value={title} aria-label="Task title" />
     <select bind:value={kind} aria-label="Recurrence">
       <option value="once">One-off / todo</option>
@@ -107,7 +132,10 @@
       <input type="number" min="1" max="31" bind:value={annualDay} aria-label="Day" />
     {/if}
 
-    <button type="submit">Add</button>
+    <button type="submit">{editingId ? 'Save' : 'Add'}</button>
+    {#if editingId}
+      <button type="button" class="cancel" onclick={resetForm}>Cancel</button>
+    {/if}
   </form>
 
   {#each grouped as section (section.key)}
@@ -119,6 +147,7 @@
             <button class="check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
             <span class="title">{t.title}</span>
             {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
+            <button class="edit" title="Edit" onclick={() => startEdit(t)} aria-label="Edit">✎</button>
             <button class="del" title="Delete" onclick={() => remove(t.id)} aria-label="Delete">✕</button>
           </li>
         {/each}
@@ -144,8 +173,10 @@
   li.overdue { border-left: 3px solid var(--danger, #d33); }
   .title { flex: 1; }
   .due { font-size: 0.85rem; opacity: 0.7; }
-  .check, .del { border: none; background: none; cursor: pointer; font-size: 1rem; opacity: 0.7; }
+  .check, .del, .edit { border: none; background: none; cursor: pointer; font-size: 1rem; opacity: 0.7; }
   .check:hover { opacity: 1; color: var(--success, #2a8); }
+  .edit:hover { opacity: 1; color: var(--copper, #b87333); }
   .del:hover { opacity: 1; color: var(--danger, #d33); }
+  .cancel { color: inherit; }
   .empty { opacity: 0.6; }
 </style>
