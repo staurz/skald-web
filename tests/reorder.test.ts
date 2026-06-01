@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/lib/server/db';
+import { createTask, listTasks, reorderTasks } from '../src/lib/server/maintenance';
 
 describe('sort_order migration', () => {
   it('adds sort_order and backfills existing rows in due-date display order', () => {
@@ -31,5 +32,36 @@ describe('sort_order migration', () => {
     }[];
     expect(rows.map((r) => r.id)).toEqual(['a', 'b', 'c']); // due asc, nulls last
     expect(rows.map((r) => r.sort_order)).toEqual([0, 1, 2]);
+  });
+});
+
+function freshDb() {
+  const dir = mkdtempSync(join(tmpdir(), 'reorder-'));
+  return openDb(join(dir, 'test.db'));
+}
+
+describe('task ordering', () => {
+  it('createTask appends with an increasing sort_order', () => {
+    const db = freshDb();
+    createTask(db, { title: 'first', recurrenceKind: 'once' }, 1000);
+    createTask(db, { title: 'second', recurrenceKind: 'once' }, 1000);
+    const tasks = listTasks(db);
+    expect(tasks.map((t) => t.title)).toEqual(['first', 'second']);
+  });
+
+  it('reorderTasks rewrites order and listTasks reflects it', () => {
+    const db = freshDb();
+    const a = createTask(db, { title: 'A', recurrenceKind: 'once' }, 1000);
+    const b = createTask(db, { title: 'B', recurrenceKind: 'once' }, 1000);
+    const c = createTask(db, { title: 'C', recurrenceKind: 'once' }, 1000);
+    reorderTasks(db, [c.id, a.id, b.id]);
+    expect(listTasks(db).map((t) => t.title)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('reorderTasks tolerates unknown ids', () => {
+    const db = freshDb();
+    const a = createTask(db, { title: 'A', recurrenceKind: 'once' }, 1000);
+    expect(() => reorderTasks(db, ['ghost', a.id])).not.toThrow();
+    expect(listTasks(db).map((t) => t.title)).toEqual(['A']);
   });
 });

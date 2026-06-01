@@ -18,6 +18,14 @@ interface Row {
   last_completed_ts: number | null;
   last_reminded_ts: number | null;
   enabled: number;
+  description: string | null;
+  category: string | null;
+  source: string;
+  priority: string | null;
+  season: string | null;
+  estimated_minutes: number | null;
+  cost_estimate: string | null;
+  seed_key: string | null;
 }
 
 function toTask(r: Row): MaintenanceTask {
@@ -34,12 +42,21 @@ function toTask(r: Row): MaintenanceTask {
     lastCompletedTs: r.last_completed_ts,
     lastRemindedTs: r.last_reminded_ts,
     enabled: !!r.enabled,
+    description: r.description,
+    category: r.category as MaintenanceTask['category'],
+    source: (r.source ?? 'manual') as MaintenanceTask['source'],
+    priority: r.priority as MaintenanceTask['priority'],
+    season: r.season as MaintenanceTask['season'],
+    estimatedMinutes: r.estimated_minutes,
+    costEstimate: r.cost_estimate,
+    seedKey: r.seed_key,
     subTasks: [],
   };
 }
 
 const SELECT = `SELECT id, title, notes, recurrence_kind, interval_value, interval_unit,
-  annual_month, annual_day, due_ts, last_completed_ts, last_reminded_ts, enabled
+  annual_month, annual_day, due_ts, last_completed_ts, last_reminded_ts, enabled,
+  description, category, source, priority, season, estimated_minutes, cost_estimate, seed_key
   FROM maintenance_task`;
 
 interface SubRow {
@@ -64,10 +81,14 @@ export function getSubTask(db: Database.Database, id: string): SubTask | null {
 export function createTask(db: Database.Database, input: TaskInput, now: number): MaintenanceTask {
   const id = randomUUID();
   const due = computeInitialDue(input, now, TZ);
+  const { n } = db
+    .prepare(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM maintenance_task`)
+    .get() as { n: number };
   db.prepare(
     `INSERT INTO maintenance_task
-      (id, title, notes, recurrence_kind, interval_value, interval_unit, annual_month, annual_day, due_ts, enabled)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      (id, title, notes, recurrence_kind, interval_value, interval_unit, annual_month, annual_day, due_ts, enabled,
+       description, category, source, priority, season, estimated_minutes, cost_estimate, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.title,
@@ -78,6 +99,14 @@ export function createTask(db: Database.Database, input: TaskInput, now: number)
     input.annualMonth ?? null,
     input.annualDay ?? null,
     due,
+    input.description ?? null,
+    input.category ?? null,
+    input.source ?? 'manual',
+    input.priority ?? null,
+    input.season ?? null,
+    input.estimatedMinutes ?? null,
+    input.costEstimate ?? null,
+    n,
   );
   return getTask(db, id)!;
 }
@@ -90,7 +119,7 @@ export function getTask(db: Database.Database, id: string): MaintenanceTask | nu
 // Active list: enabled tasks only (completed once-tasks are disabled = archived).
 // Each task carries its checklist of sub-tasks (empty for plain tasks).
 export function listTasks(db: Database.Database): MaintenanceTask[] {
-  const rows = db.prepare(`${SELECT} WHERE enabled = 1 ORDER BY due_ts IS NULL, due_ts ASC`).all() as Row[];
+  const rows = db.prepare(`${SELECT} WHERE enabled = 1 ORDER BY sort_order ASC, rowid ASC`).all() as Row[];
   const tasks = rows.map(toTask);
   const subs = db.prepare(`${SUB_SELECT} ORDER BY sort_order ASC, rowid ASC`).all() as SubRow[];
   const byParent = new Map<string, SubTask[]>();
@@ -108,7 +137,9 @@ export function updateTask(db: Database.Database, id: string, input: TaskInput, 
   const due = computeInitialDue(input, now, TZ);
   db.prepare(
     `UPDATE maintenance_task SET title = ?, notes = ?, recurrence_kind = ?, interval_value = ?,
-      interval_unit = ?, annual_month = ?, annual_day = ?, due_ts = ? WHERE id = ?`,
+      interval_unit = ?, annual_month = ?, annual_day = ?, due_ts = ?,
+      description = ?, category = ?, source = ?, priority = ?, season = ?,
+      estimated_minutes = ?, cost_estimate = ? WHERE id = ?`,
   ).run(
     input.title,
     input.notes ?? null,
@@ -118,6 +149,13 @@ export function updateTask(db: Database.Database, id: string, input: TaskInput, 
     input.annualMonth ?? null,
     input.annualDay ?? null,
     due,
+    input.description ?? null,
+    input.category ?? null,
+    input.source ?? 'manual',
+    input.priority ?? null,
+    input.season ?? null,
+    input.estimatedMinutes ?? null,
+    input.costEstimate ?? null,
     id,
   );
   return getTask(db, id);
@@ -126,6 +164,16 @@ export function updateTask(db: Database.Database, id: string, input: TaskInput, 
 export function deleteTask(db: Database.Database, id: string): void {
   db.prepare('DELETE FROM sub_task WHERE parent_id = ?').run(id);
   db.prepare('DELETE FROM maintenance_task WHERE id = ?').run(id);
+}
+
+// Rewrite the manual order of tasks. `ids` is the complete top-to-bottom list;
+// each task's sort_order becomes its index. Unknown ids are ignored.
+export function reorderTasks(db: Database.Database, ids: string[]): void {
+  const upd = db.prepare('UPDATE maintenance_task SET sort_order = ? WHERE id = ?');
+  const tx = db.transaction((list: string[]) => {
+    list.forEach((id, i) => upd.run(i, id));
+  });
+  tx(ids);
 }
 
 export function addSubTask(db: Database.Database, parentId: string, title: string): SubTask | null {
