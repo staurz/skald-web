@@ -179,10 +179,10 @@
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ids }),
-    });
+    }).catch(() => {});
   }
 
-  function handleDnd(key: string, items: MaintenanceTask[], commit: boolean) {
+  function handleDnd(key: 'overdue' | 'soon' | 'upcoming' | 'todo', items: MaintenanceTask[], commit: boolean) {
     const sec = sections.find((s) => s.key === key);
     if (sec) sec.items = items; // live preview during drag, committed order on finalize
     if (commit) persistOrder();
