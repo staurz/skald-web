@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
+  import { flip } from 'svelte/animate';
   import type { MaintenanceTask, TaskInput, RecurrenceKind, IntervalUnit } from '$lib/server/maintenance-types';
   // SubTask type is carried inside MaintenanceTask.subTasks; no separate import needed.
 
@@ -83,6 +85,7 @@
   async function load() {
     const r = await fetch('/api/maintenance/tasks');
     if (r.ok) tasks = (await r.json()).tasks;
+    rebuildSections();
   }
   onMount(load);
 
@@ -160,13 +163,30 @@
   }
   const labels = { overdue: 'Overdue', soon: 'Due soon', upcoming: 'Upcoming', todo: 'No date' };
 
-  let grouped = $derived(
-    (['overdue', 'soon', 'upcoming', 'todo'] as const).map((g) => ({
-      key: g,
-      label: labels[g],
-      items: tasks.filter((t) => group(t) === g),
-    })).filter((s) => s.items.length > 0),
-  );
+  const FLIP_MS = 150;
+  let sections = $state<{ key: 'overdue' | 'soon' | 'upcoming' | 'todo'; label: string; items: MaintenanceTask[] }[]>([]);
+
+  function rebuildSections() {
+    sections = (['overdue', 'soon', 'upcoming', 'todo'] as const)
+      .map((g) => ({ key: g, label: labels[g], items: tasks.filter((t) => group(t) === g) }))
+      .filter((s) => s.items.length > 0);
+  }
+
+  // Persist the full top-to-bottom order across all sections.
+  function persistOrder() {
+    const ids = sections.flatMap((s) => s.items.map((t) => t.id));
+    fetch('/api/maintenance/tasks/reorder', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  }
+
+  function handleDnd(key: string, items: MaintenanceTask[], commit: boolean) {
+    const sec = sections.find((s) => s.key === key);
+    if (sec) sec.items = items; // live preview during drag, committed order on finalize
+    if (commit) persistOrder();
+  }
 
   function fmtDue(ts: number | null): string {
     if (ts === null) return '';
@@ -211,13 +231,18 @@
     {/if}
   </form>
 
-  {#each grouped as section (section.key)}
+  {#each sections as section (section.key)}
     <section>
       <h2>{section.label}</h2>
-      <ul>
+      <ul
+        use:dragHandleZone={{ items: section.items, type: section.key, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
+        onconsider={(e) => handleDnd(section.key, e.detail.items, false)}
+        onfinalize={(e) => handleDnd(section.key, e.detail.items, true)}
+      >
         {#each section.items as t (t.id)}
-          <li class={group(t)}>
+          <li class={group(t)} animate:flip={{ duration: FLIP_MS }}>
             <div class="row">
+              <span class="drag" use:dragHandle aria-label="Drag to reorder" title="Drag to reorder">⠿</span>
               {#if hasDetail(t)}
                 <button class="check chev" title="Show details" onclick={() => toggleExpand(t.id)} aria-label="Show details" aria-expanded={!!expanded[t.id]}>{expanded[t.id] ? '▾' : '▸'}</button>
               {:else}
@@ -357,6 +382,15 @@
     color: var(--paper-soft);
     transition: color 0.25s;
   }
+  .drag {
+    cursor: grab;
+    color: var(--paper-mute);
+    font-size: 1.1rem;
+    line-height: 1;
+    user-select: none;
+    touch-action: none; /* let the library own the drag gesture on touch */
+  }
+  .drag:active { cursor: grabbing; }
   .check:hover { color: var(--moss); }
   .edit:hover { color: var(--copper); }
   .del:hover { color: var(--rust); }
