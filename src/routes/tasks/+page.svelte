@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
-  import type { MaintenanceTask, TaskInput, RecurrenceKind, IntervalUnit } from '$lib/server/maintenance-types';
+  import type { MaintenanceTask, TaskInput, RecurrenceKind, IntervalUnit, CompletionSnapshot } from '$lib/server/maintenance-types';
   // SubTask type is carried inside MaintenanceTask.subTasks; no separate import needed.
 
   let tasks = $state<MaintenanceTask[]>([]);
@@ -16,6 +16,40 @@
   let editingId = $state<string | null>(null);
   let expanded = $state<Record<string, boolean>>({});
   let newItem = $state<Record<string, string>>({});
+  let undo = $state<{ id: string; snapshot: CompletionSnapshot } | null>(null);
+  let undoTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Pre-completion snapshot of a task. `tickedSubId` (optional) is the sub-item
+  // just checked that triggered a happening's auto-complete: it must read as done
+  // so an undo re-checks the whole checklist.
+  function snapOf(t: MaintenanceTask, tickedSubId?: string): CompletionSnapshot {
+    return {
+      dueTs: t.dueTs,
+      lastCompletedTs: t.lastCompletedTs,
+      lastRemindedTs: t.lastRemindedTs,
+      enabled: t.enabled,
+      subTasks: t.subTasks.map((s) => ({ id: s.id, done: tickedSubId === s.id ? true : s.done })),
+    };
+  }
+
+  function showUndo(id: string, snapshot: CompletionSnapshot) {
+    undo = { id, snapshot };
+    if (undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { undo = null; }, 6000);
+  }
+
+  async function doUndo() {
+    if (!undo) return;
+    const { id, snapshot } = undo;
+    undo = null;
+    if (undoTimer) clearTimeout(undoTimer);
+    await fetch(`/api/maintenance/tasks/${id}/uncomplete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(snapshot),
+    });
+    await load();
+  }
 
   const MONTHS = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -49,8 +83,12 @@
   }
 
   async function toggleSub(subId: string) {
-    await fetch(`/api/maintenance/subtasks/${subId}/toggle`, { method: 'POST' });
+    const parent = tasks.find((t) => t.subTasks.some((s) => s.id === subId));
+    const snapshot = parent ? snapOf(parent, subId) : null;
+    const r = await fetch(`/api/maintenance/subtasks/${subId}/toggle`, { method: 'POST' });
+    const res = r.ok ? ((await r.json()) as { completed: boolean }) : { completed: false };
     await load();
+    if (res.completed && parent && snapshot) showUndo(parent.id, snapshot);
   }
 
   async function removeSub(subId: string) {
@@ -144,8 +182,11 @@
   }
 
   async function complete(id: string) {
+    const t = tasks.find((x) => x.id === id);
+    const snapshot = t ? snapOf(t) : null;
     await fetch(`/api/maintenance/tasks/${id}/complete`, { method: 'POST' });
     await load();
+    if (snapshot) showUndo(id, snapshot);
   }
 
   async function remove(id: string) {
@@ -246,13 +287,13 @@
               {#if hasDetail(t)}
                 <button class="check chev" title="Show details" onclick={() => toggleExpand(t.id)} aria-label="Show details" aria-expanded={!!expanded[t.id]}>{expanded[t.id] ? '▾' : '▸'}</button>
               {:else}
-                <button class="check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
+                <button class="big-check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete"></button>
               {/if}
               <span class="title">{t.title}</span>
               {#if t.subTasks.length > 0}<span class="count">{progress(t)}</span>{/if}
               {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
               {#if t.subTasks.length === 0 && hasDetail(t)}
-                <button class="edit done-btn" title="Complete" onclick={() => complete(t.id)} aria-label="Complete">✓</button>
+                <button class="big-check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete"></button>
               {/if}
               <button class="edit" title="Edit" onclick={() => startEdit(t)} aria-label="Edit">✎</button>
               <button class="del" title="Delete" onclick={() => remove(t.id)} aria-label="Delete">✕</button>
@@ -296,6 +337,13 @@
 
   {#if tasks.length === 0}
     <p class="empty">No tasks yet.</p>
+  {/if}
+
+  {#if undo}
+    <div class="toast" role="status">
+      <span>Completed</span>
+      <button onclick={doUndo}>Undo</button>
+    </div>
   {/if}
 </main>
 
@@ -382,6 +430,47 @@
     color: var(--paper-soft);
     transition: color 0.25s;
   }
+  .big-check {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 2px solid var(--paper-faint);
+    background: transparent;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .big-check:hover {
+    border-color: var(--moss);
+    background: rgba(138, 166, 141, 0.18);
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: var(--ink-3);
+    border: 1px solid var(--paper-line);
+    box-shadow: var(--shadow-1);
+    color: var(--paper);
+    z-index: 20;
+  }
+  .toast button {
+    border: 0;
+    background: none;
+    color: var(--copper);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
   .drag {
     cursor: grab;
     color: var(--paper-mute);
@@ -397,7 +486,6 @@
   .empty { color: var(--paper-mute); }
 
   .chev { font-size: 0.9rem; }
-  .done-btn:hover { color: var(--moss); }
 
   .detail { margin: 2px 0 0 26px; display: flex; flex-direction: column; gap: 12px; }
   .desc { display: flex; flex-direction: column; gap: 7px; }
@@ -420,7 +508,7 @@
 
   .items { display: flex; flex-direction: column; gap: 9px; }
   .item { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; color: var(--paper); }
-  .item input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--copper); flex-shrink: 0; }
+  .item input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--copper); flex-shrink: 0; }
   .item span.done { text-decoration: line-through; color: var(--paper-mute); }
   .del.small { font-size: 0.85rem; margin-left: auto; color: var(--paper-mute); }
   .add-item input {
