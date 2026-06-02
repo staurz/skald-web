@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { computeInitialDue, nextDueAfterComplete } from './recurrence';
-import type { MaintenanceTask, SubTask, TaskInput } from './maintenance-types';
+import type { MaintenanceTask, SubTask, TaskInput, CompletionSnapshot } from './maintenance-types';
 
 export const TZ = process.env.TIMEZONE ?? 'Europe/Oslo';
 
@@ -230,6 +230,27 @@ export function completeTask(db: Database.Database, id: string, now: number): Ma
       'UPDATE maintenance_task SET last_completed_ts = ?, due_ts = ?, last_reminded_ts = NULL WHERE id = ?',
     ).run(now, next, id);
   }
+  return getTask(db, id);
+}
+
+// Undo a completion: write the pre-completion snapshot back onto the task and
+// restore each captured sub-item's done state (a recurring happening had them
+// reset to 0 on completion).
+export function restoreTask(
+  db: Database.Database,
+  id: string,
+  snap: CompletionSnapshot,
+): MaintenanceTask | null {
+  if (!getTask(db, id)) return null;
+  const updTask = db.prepare(
+    'UPDATE maintenance_task SET due_ts = ?, last_completed_ts = ?, last_reminded_ts = ?, enabled = ? WHERE id = ?',
+  );
+  const updSub = db.prepare('UPDATE sub_task SET done = ? WHERE id = ?');
+  const tx = db.transaction(() => {
+    updTask.run(snap.dueTs, snap.lastCompletedTs, snap.lastRemindedTs, snap.enabled ? 1 : 0, id);
+    for (const s of snap.subTasks) updSub.run(s.done ? 1 : 0, s.id);
+  });
+  tx();
   return getTask(db, id);
 }
 

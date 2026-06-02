@@ -79,4 +79,13 @@ export interface TaskInput {
   costEstimate?: string | null;
 }
 
+// The pre-completion state the client holds so an Undo can restore it.
+export interface CompletionSnapshot {
+  dueTs: number | null;
+  lastCompletedTs: number | null;
+  lastRemindedTs: number | null;
+  enabled: boolean;
+  subTasks: { id: string; done: boolean }[];
+}
+
 export const REMINDER_HOUR = 9;

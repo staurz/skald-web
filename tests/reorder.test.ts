@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/lib/server/db';
-import { createTask, listTasks, reorderTasks } from '../src/lib/server/maintenance';
+import { createTask, listTasks, reorderTasks, addSubTask, toggleSubTask, completeTask, getTask, restoreTask } from '../src/lib/server/maintenance';
 
 describe('sort_order migration', () => {
   it('adds sort_order and backfills existing rows in due-date display order', () => {
@@ -63,5 +63,55 @@ describe('task ordering', () => {
     const a = createTask(db, { title: 'A', recurrenceKind: 'once' }, 1000);
     expect(() => reorderTasks(db, ['ghost', a.id])).not.toThrow();
     expect(listTasks(db).map((t) => t.title)).toEqual(['A']);
+  });
+});
+
+describe('restoreTask (undo)', () => {
+  it('restores a completed once-task to active with its prior due date', () => {
+    const db = freshDb();
+    const t = createTask(db, { title: 'Vask', recurrenceKind: 'once', firstDueDate: '2026-07-01' }, 1000);
+    const snap = {
+      dueTs: t.dueTs,
+      lastCompletedTs: t.lastCompletedTs,
+      lastRemindedTs: t.lastRemindedTs,
+      enabled: t.enabled,
+      subTasks: [] as { id: string; done: boolean }[],
+    };
+    completeTask(db, t.id, 5000);
+    expect(getTask(db, t.id)!.enabled).toBe(false); // once -> archived
+
+    restoreTask(db, t.id, snap);
+    const after = getTask(db, t.id)!;
+    expect(after.enabled).toBe(true);
+    expect(after.dueTs).toBe(t.dueTs);
+    expect(after.lastCompletedTs).toBeNull();
+  });
+
+  it('restores a happening: re-checks sub-items and reactivates the prior schedule', () => {
+    const db = freshDb();
+    const t = createTask(db, { title: 'Vinterklar', recurrenceKind: 'annual', annualMonth: 10, annualDay: 15 }, 1000);
+    const s1 = addSubTask(db, t.id, 'Robotklipper inn')!;
+    const s2 = addSubTask(db, t.id, 'Takrenner')!;
+    const before = getTask(db, t.id)!;
+    const snap = {
+      dueTs: before.dueTs,
+      lastCompletedTs: before.lastCompletedTs,
+      lastRemindedTs: before.lastRemindedTs,
+      enabled: before.enabled,
+      subTasks: [
+        { id: s1.id, done: true },
+        { id: s2.id, done: true },
+      ],
+    };
+    toggleSubTask(db, s1.id, 5000);
+    const res = toggleSubTask(db, s2.id, 5000); // last tick -> auto-complete
+    expect(res.completed).toBe(true);
+    expect(listTasks(db).find((x) => x.id === t.id)!.subTasks.every((s) => !s.done)).toBe(true);
+
+    restoreTask(db, t.id, snap);
+    const restored = listTasks(db).find((x) => x.id === t.id)!;
+    expect(restored.subTasks.every((s) => s.done)).toBe(true);
+    expect(restored.dueTs).toBe(before.dueTs);
+    expect(restored.lastCompletedTs).toBe(before.lastCompletedTs);
   });
 });
