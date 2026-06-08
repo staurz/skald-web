@@ -75,6 +75,7 @@ describe('maintenance_task schema', () => {
         'interval_value',
         'last_completed_ts',
         'last_reminded_ts',
+        'last_weather_fired_ts',
         'notes',
         'priority',
         'recurrence_kind',
@@ -83,6 +84,7 @@ describe('maintenance_task schema', () => {
         'sort_order',
         'source',
         'title',
+        'weather_trigger',
       ].sort(),
     );
   });
