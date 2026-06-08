@@ -46,6 +46,8 @@ export interface MaintenanceTask {
   estimatedMinutes: number | null;
   costEstimate: string | null; // e.g. takst band '10 000–50 000'
   seedKey: string | null; // stable id for idempotent seeding; null for manual tasks
+  weatherTrigger: boolean; // opt-in: react to a sub-zero forecast
+  lastWeatherFiredTs: number | null; // epoch ms of last weather trigger; null = never
   subTasks: SubTask[];
 }
 

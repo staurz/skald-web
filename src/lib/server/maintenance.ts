@@ -26,6 +26,8 @@ interface Row {
   estimated_minutes: number | null;
   cost_estimate: string | null;
   seed_key: string | null;
+  weather_trigger: number;
+  last_weather_fired_ts: number | null;
 }
 
 function toTask(r: Row): MaintenanceTask {
@@ -50,13 +52,16 @@ function toTask(r: Row): MaintenanceTask {
     estimatedMinutes: r.estimated_minutes,
     costEstimate: r.cost_estimate,
     seedKey: r.seed_key,
+    weatherTrigger: !!r.weather_trigger,
+    lastWeatherFiredTs: r.last_weather_fired_ts,
     subTasks: [],
   };
 }
 
 const SELECT = `SELECT id, title, notes, recurrence_kind, interval_value, interval_unit,
   annual_month, annual_day, due_ts, last_completed_ts, last_reminded_ts, enabled,
-  description, category, source, priority, season, estimated_minutes, cost_estimate, seed_key
+  description, category, source, priority, season, estimated_minutes, cost_estimate, seed_key,
+  weather_trigger, last_weather_fired_ts
   FROM maintenance_task`;
 
 interface SubRow {
