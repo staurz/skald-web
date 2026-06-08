@@ -75,7 +75,11 @@ CREATE TABLE IF NOT EXISTS maintenance_task (
   season TEXT,
   estimated_minutes INTEGER,
   cost_estimate TEXT,
-  seed_key TEXT
+  seed_key TEXT,
+  -- Weather-triggered tasks: opt-in flag + cooldown timestamp (added later; see
+  -- MAINTENANCE_TASK_COLUMNS migration below).
+  weather_trigger INTEGER NOT NULL DEFAULT 0,
+  last_weather_fired_ts INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_task_due ON maintenance_task(due_ts);
 -- NOTE: the unique index on seed_key is created in migrate(), NOT here. On an
@@ -110,6 +114,8 @@ const MAINTENANCE_TASK_COLUMNS: Record<string, string> = {
   estimated_minutes: 'INTEGER',
   cost_estimate: 'TEXT',
   seed_key: 'TEXT',
+  weather_trigger: 'INTEGER NOT NULL DEFAULT 0',
+  last_weather_fired_ts: 'INTEGER',
 };
 
 function migrate(db: Database.Database): void {
