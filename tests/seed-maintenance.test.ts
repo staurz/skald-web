@@ -133,3 +133,26 @@ describe('seed-maintenance', () => {
     }
   });
 });
+
+describe('weather-triggered seed', () => {
+  it('flags general-snolast with weather_trigger = 1 and nothing else', () => {
+    const db = tempDb();
+    seedMaintenance(db, FIXED_NOW);
+    const rows = db
+      .prepare(`SELECT seed_key, weather_trigger FROM maintenance_task`)
+      .all() as { seed_key: string; weather_trigger: number }[];
+    const flagged = rows.filter((r) => r.weather_trigger === 1).map((r) => r.seed_key);
+    expect(flagged).toEqual(['general-snolast']);
+  });
+
+  it('re-seeding preserves last_weather_fired_ts (runtime state)', () => {
+    const db = tempDb();
+    seedMaintenance(db, FIXED_NOW);
+    db.prepare(`UPDATE maintenance_task SET last_weather_fired_ts = 123 WHERE seed_key='general-snolast'`).run();
+    seedMaintenance(db, FIXED_NOW + 86_400_000);
+    const r = db
+      .prepare(`SELECT last_weather_fired_ts FROM maintenance_task WHERE seed_key='general-snolast'`)
+      .get() as { last_weather_fired_ts: number };
+    expect(r.last_weather_fired_ts).toBe(123);
+  });
+});

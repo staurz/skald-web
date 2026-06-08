@@ -141,6 +141,8 @@ const MAINTENANCE_COLUMNS = {
   estimated_minutes: 'INTEGER',
   cost_estimate: 'TEXT',
   seed_key: 'TEXT',
+  weather_trigger: 'INTEGER NOT NULL DEFAULT 0',
+  last_weather_fired_ts: 'INTEGER',
 };
 
 export function ensureSchema(db) {
@@ -165,7 +167,9 @@ export function ensureSchema(db) {
       season TEXT,
       estimated_minutes INTEGER,
       cost_estimate TEXT,
-      seed_key TEXT
+      seed_key TEXT,
+      weather_trigger INTEGER NOT NULL DEFAULT 0,
+      last_weather_fired_ts INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_task_due ON maintenance_task(due_ts);
     CREATE TABLE IF NOT EXISTS sub_task (
@@ -630,6 +634,7 @@ export const SEED_TASKS = [
     source: 'general',
     priority: 'medium',
     season: 'winter',
+    weatherTrigger: true,
     recurrenceKind: 'annual',
     annualMonth: 1,
     annualDay: 15,
@@ -871,10 +876,10 @@ export function seedMaintenance(db, now = Date.now(), tz = TZ) {
   const upsert = db.prepare(`
     INSERT INTO maintenance_task
       (id, title, notes, recurrence_kind, interval_value, interval_unit, annual_month, annual_day,
-       due_ts, enabled, description, category, source, priority, season, estimated_minutes, cost_estimate, seed_key)
+       due_ts, enabled, description, category, source, priority, season, estimated_minutes, cost_estimate, seed_key, weather_trigger)
     VALUES
       (@id, @title, NULL, @recurrence_kind, @interval_value, @interval_unit, @annual_month, @annual_day,
-       @due_ts, 1, @description, @category, @source, @priority, @season, @estimated_minutes, @cost_estimate, @seed_key)
+       @due_ts, 1, @description, @category, @source, @priority, @season, @estimated_minutes, @cost_estimate, @seed_key, @weather_trigger)
     ON CONFLICT(seed_key) DO UPDATE SET
       title = excluded.title,
       recurrence_kind = excluded.recurrence_kind,
@@ -888,7 +893,8 @@ export function seedMaintenance(db, now = Date.now(), tz = TZ) {
       priority = excluded.priority,
       season = excluded.season,
       estimated_minutes = excluded.estimated_minutes,
-      cost_estimate = excluded.cost_estimate
+      cost_estimate = excluded.cost_estimate,
+      weather_trigger = excluded.weather_trigger
   `);
   const getBySeed = db.prepare(`SELECT id FROM maintenance_task WHERE seed_key = ?`);
   const countSubs = db.prepare(`SELECT COUNT(*) AS c FROM sub_task WHERE parent_id = ?`);
@@ -919,6 +925,7 @@ export function seedMaintenance(db, now = Date.now(), tz = TZ) {
         estimated_minutes: t.estimatedMinutes ?? null,
         cost_estimate: t.costEstimate ?? null,
         seed_key: t.seedKey,
+        weather_trigger: t.weatherTrigger ? 1 : 0,
       });
       if (existing) stats.updated++;
       else stats.inserted++;
