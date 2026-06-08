@@ -273,3 +273,20 @@ export function selectDueTasks(db: Database.Database, now: number): MaintenanceT
 export function markReminded(db: Database.Database, id: string, now: number): void {
   db.prepare('UPDATE maintenance_task SET last_reminded_ts = ? WHERE id = ?').run(now, id);
 }
+
+// Enabled tasks opted into weather triggering. Ordered for stable iteration.
+export function selectWeatherTriggerTasks(db: Database.Database): MaintenanceTask[] {
+  const rows = db
+    .prepare(`${SELECT} WHERE enabled = 1 AND weather_trigger = 1 ORDER BY sort_order ASC, rowid ASC`)
+    .all() as Row[];
+  return rows.map(toTask);
+}
+
+// Pull a weather-triggered task forward to "due now". last_reminded_ts is set to
+// now (= due_ts) so the hourly maintenance-reminder loop does NOT also send a
+// generic "Task due" push — the weather loop sends its own cold-snap push.
+export function markWeatherTriggered(db: Database.Database, id: string, now: number): void {
+  db.prepare(
+    'UPDATE maintenance_task SET due_ts = ?, last_weather_fired_ts = ?, last_reminded_ts = ? WHERE id = ?',
+  ).run(now, now, now, id);
+}

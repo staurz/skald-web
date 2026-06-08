@@ -11,6 +11,8 @@ import {
   deleteTask,
   completeTask,
   selectDueTasks,
+  selectWeatherTriggerTasks,
+  markWeatherTriggered,
   TZ,
 } from '../src/lib/server/maintenance';
 
@@ -155,5 +157,38 @@ describe('selectDueTasks', () => {
     const now = Date.parse('2025-06-01T09:30:00Z');
     db.prepare('UPDATE maintenance_task SET last_reminded_ts = ? WHERE id = ?').run(now, t.id);
     expect(selectDueTasks(db, now)).toHaveLength(0);
+  });
+});
+
+describe('weather-trigger helpers', () => {
+  it('selectWeatherTriggerTasks returns only enabled flagged tasks', () => {
+    const db = tempDb();
+    // Insert directly: createTask does not set weather_trigger (no UI path).
+    db.prepare(
+      `INSERT INTO maintenance_task (id, title, recurrence_kind, enabled, weather_trigger)
+       VALUES ('w1','Flagged on','annual',1,1),
+              ('w2','Flagged disabled','annual',0,1),
+              ('w3','Not flagged','annual',1,0)`,
+    ).run();
+    const tasks = selectWeatherTriggerTasks(db);
+    expect(tasks.map((t) => t.id)).toEqual(['w1']);
+    expect(tasks[0].weatherTrigger).toBe(true);
+    expect(tasks[0].lastWeatherFiredTs).toBeNull();
+  });
+
+  it('markWeatherTriggered sets due_ts, last_weather_fired_ts and last_reminded_ts to now', () => {
+    const db = tempDb();
+    const now = Date.parse('2026-06-01T08:00:00Z');
+    db.prepare(
+      `INSERT INTO maintenance_task (id, title, recurrence_kind, enabled, weather_trigger)
+       VALUES ('w1','Snow load','annual',1,1)`,
+    ).run();
+    markWeatherTriggered(db, 'w1', now);
+    const r = db
+      .prepare(`SELECT due_ts, last_weather_fired_ts, last_reminded_ts FROM maintenance_task WHERE id='w1'`)
+      .get() as { due_ts: number; last_weather_fired_ts: number; last_reminded_ts: number };
+    expect(r.due_ts).toBe(now);
+    expect(r.last_weather_fired_ts).toBe(now);
+    expect(r.last_reminded_ts).toBe(now); // suppresses the generic "Task due" push
   });
 });
