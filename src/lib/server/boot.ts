@@ -8,6 +8,7 @@ import { startRollupLoop } from './history';
 import { evaluateRules } from './alerts';
 import { sendToAll } from './push';
 import { selectDueTasks, markReminded } from './maintenance';
+import { checkWeatherTriggers } from './weather-trigger';
 import type { AlertRule, AuthenticationSpa } from './types';
 
 let started = false;
@@ -54,6 +55,17 @@ export function startBackend(): BootResult {
       console.error('[maintenance] reminder loop failed', err);
     }
   }, MAINT_HOUR_MS);
+
+  // Weather-triggered winter tasks: once a day (and once on boot), pull any
+  // flagged task forward to "due" + push when a sub-zero snap is forecast.
+  // Runs independently of MQTT for the same reason as the reminder loop above.
+  const WEATHER_CHECK_MS = 24 * 60 * 60 * 1000;
+  const runWeatherCheck = () =>
+    checkWeatherTriggers(db, Date.now()).catch((err) =>
+      console.error('[weather] check loop failed', err),
+    );
+  runWeatherCheck();
+  setInterval(runWeatherCheck, WEATHER_CHECK_MS);
 
   if (!uuid || !username || !passwordHash || !installationId) {
     console.warn('[boot] secrets missing — skipping MQTT until /setup is completed');
