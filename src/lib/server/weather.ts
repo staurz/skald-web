@@ -46,3 +46,35 @@ export function isColdSnapForecast(forecast: Forecast, now: number): boolean {
 export function shouldFire(lastFiredTs: number | null, now: number): boolean {
   return lastFiredTs === null || now - lastFiredTs >= COOLDOWN_MS;
 }
+
+// In-memory cache of the last good response so we can send If-Modified-Since and
+// honour MET's 304s — required to be a well-behaved MET client.
+let cache: { lastModified: string | null; body: Forecast } | null = null;
+
+const FORECAST_URL = 'https://api.met.no/weatherapi/locationforecast/2.0/compact';
+
+// Fetch the compact forecast for a coordinate. Returns null on ANY failure
+// (network, non-200, malformed/empty body) so callers can simply skip the tick.
+export async function fetchForecast(lat: number, lon: number): Promise<Forecast | null> {
+  const url = `${FORECAST_URL}?lat=${lat}&lon=${lon}`;
+  const headers: Record<string, string> = { 'User-Agent': MET_USER_AGENT };
+  if (cache?.lastModified) headers['If-Modified-Since'] = cache.lastModified;
+  try {
+    const res = await fetch(url, { headers });
+    if (res.status === 304 && cache) return cache.body;
+    if (!res.ok) {
+      console.warn(`[weather] forecast fetch failed: HTTP ${res.status}`);
+      return null;
+    }
+    const json = (await res.json()) as Forecast;
+    if (!json?.properties?.timeseries?.length) {
+      console.warn('[weather] forecast response had no timeseries');
+      return null;
+    }
+    cache = { lastModified: res.headers.get('last-modified'), body: json };
+    return json;
+  } catch (err) {
+    console.warn('[weather] forecast fetch error', err);
+    return null;
+  }
+}

@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { minTempWithinHours, isColdSnapForecast, shouldFire } from '../src/lib/server/weather';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import {
+  minTempWithinHours,
+  isColdSnapForecast,
+  shouldFire,
+  fetchForecast,
+} from '../src/lib/server/weather';
 import type { Forecast } from '../src/lib/server/weather';
 
 const NOW = Date.parse('2026-01-10T00:00:00Z');
@@ -62,5 +67,41 @@ describe('shouldFire (180-day cooldown)', () => {
   });
   it('re-arms after 180 days', () => {
     expect(shouldFire(NOW - 181 * DAY, NOW)).toBe(true);
+  });
+});
+
+afterEach(() => vi.unstubAllGlobals());
+
+function stubFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
+  vi.stubGlobal('fetch', vi.fn(impl));
+}
+
+describe('fetchForecast', () => {
+  const body = { properties: { timeseries: [{ time: '2026-01-10T00:00:00Z', data: { instant: { details: { air_temperature: -3 } } } }] } };
+
+  it('returns parsed forecast on 200 and sends a User-Agent', async () => {
+    let seenUA: string | undefined;
+    stubFetch(async (_url, init) => {
+      seenUA = new Headers(init?.headers).get('User-Agent') ?? undefined;
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'last-modified': 'Sat, 10 Jan 2026 00:00:00 GMT' } });
+    });
+    const f = await fetchForecast(62.468, 6.394);
+    expect(f?.properties.timeseries).toHaveLength(1);
+    expect(seenUA).toContain('artic-spa-v2');
+  });
+
+  it('returns null on non-200', async () => {
+    stubFetch(async () => new Response('nope', { status: 503 }));
+    expect(await fetchForecast(1, 2)).toBeNull();
+  });
+
+  it('returns null on a network error', async () => {
+    stubFetch(async () => { throw new Error('ECONNRESET'); });
+    expect(await fetchForecast(1, 2)).toBeNull();
+  });
+
+  it('returns null on an empty/garbage body', async () => {
+    stubFetch(async () => new Response(JSON.stringify({ properties: { timeseries: [] } }), { status: 200 }));
+    expect(await fetchForecast(1, 2)).toBeNull();
   });
 });
