@@ -209,7 +209,13 @@
 
   function rebuildSections() {
     sections = (['overdue', 'soon', 'upcoming', 'todo'] as const)
-      .map((g) => ({ key: g, label: labels[g], items: tasks.filter((t) => group(t) === g) }))
+      .map((g) => {
+        const items = tasks.filter((t) => group(t) === g);
+        // Dated sections are ordered by due date (soonest first). The "No date"
+        // bucket keeps its manual sort_order so it stays drag-reorderable.
+        if (g !== 'todo') items.sort((a, b) => (a.dueTs ?? 0) - (b.dueTs ?? 0));
+        return { key: g, label: labels[g], items };
+      })
       .filter((s) => s.items.length > 0);
   }
 
@@ -276,14 +282,14 @@
     <section>
       <h2>{section.label}</h2>
       <ul
-        use:dragHandleZone={{ items: section.items, type: section.key, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
+        use:dragHandleZone={{ items: section.items, type: section.key, flipDurationMs: FLIP_MS, dropTargetStyle: {}, dragDisabled: section.key !== 'todo' }}
         onconsider={(e) => handleDnd(section.key, e.detail.items, false)}
         onfinalize={(e) => handleDnd(section.key, e.detail.items, true)}
       >
         {#each section.items as t (t.id)}
           <li class={group(t)} animate:flip={{ duration: FLIP_MS }}>
             <div class="row">
-              <span class="drag" use:dragHandle aria-label="Drag to reorder" title="Drag to reorder">⠿</span>
+              {#if section.key === 'todo'}<span class="drag" use:dragHandle aria-label="Drag to reorder" title="Drag to reorder">⠿</span>{/if}
               {#if hasDetail(t)}
                 <button class="check chev" title="Show details" onclick={() => toggleExpand(t.id)} aria-label="Show details" aria-expanded={!!expanded[t.id]}>{expanded[t.id] ? '▾' : '▸'}</button>
               {:else}
