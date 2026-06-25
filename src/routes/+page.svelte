@@ -13,8 +13,8 @@
   <TemperatureCard state={$spaState} />
 
   <div class="grid">
-    <AccessoryGrid state={$spaState} />
     <ChemistryCard spa={$spaState} />
+    <AccessoryGrid state={$spaState} />
   </div>
 </div>
 

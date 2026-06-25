@@ -6,6 +6,8 @@ import type { RawMqttEvent, SpaState } from './types';
 //   - heater1, heater2, blower1, blower2: integers (0 = off, >0 = on/level)
 //   - spaboy.ph: centi-pH (divide by 100 for actual pH)
 //   - spaboy.orp: raw mV integer
+//   - spaboy.orpColor: SpaboyColor band index (0 very low … 2 ok … 4 very high),
+//     the spa's own sanitizer rating; surfaced as the "CL" band (no chlorine probe)
 //   - telemetry/errors: object of named booleans; truthy entries are active error codes
 
 const ERROR_CODE_KEYS = [
@@ -50,9 +52,10 @@ export function normalise(event: RawMqttEvent): Partial<SpaState> | null {
   }
 
   if (t.endsWith('/telemetry/spaboy')) {
-    const c: { ph?: number; orp?: number } = {};
+    const c: { ph?: number; orp?: number; clBand?: number } = {};
     if (typeof p.ph === 'number') c.ph = p.ph / 100;
     if (typeof p.orp === 'number') c.orp = p.orp;
+    if (typeof p.orpColor === 'number' && p.orpColor >= 0 && p.orpColor <= 4) c.clBand = p.orpColor;
     return Object.keys(c).length ? { chemistry: c } : null;
   }
 

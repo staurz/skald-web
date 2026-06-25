@@ -15,6 +15,13 @@
   function stateWord(s: ChemState) {
     return { ok: 'in range', low: 'below', high: 'above', unknown: '—' }[s];
   }
+  // Collapse the spa's 5-level sanitizer band (SpaboyColor 0–4) to the 3-level
+  // state the ORP block renders.
+  function bandToChemState(b: number | undefined): ChemState {
+    if (b == null) return 'unknown';
+    if (b === 2) return 'ok';
+    return b < 2 ? 'low' : 'high';
+  }
   function stateColor(s: ChemState) {
     return s === 'ok' ? 'var(--moss)' : s === 'unknown' ? 'var(--paper-mute)' : 'var(--amber)';
   }
@@ -26,12 +33,37 @@
   let c = $derived(spa?.chemistry);
   let phVal = $derived(c?.ph);
   let orpVal = $derived(c?.orp);
+  let clBand = $derived(c?.clBand);
   let phState = $derived(chemState(phVal, 7.2, 7.8));
-  let orpState = $derived(chemState(orpVal, 600, 800));
+  // Arctic's Spa Boy maintains ORP in a 545–550 mV band (LOW preset; the spa
+  // also offers MID 645–655 / HIGH 745–755). Prefer the spa's own verdict
+  // (orpColor) so the ORP and CL blocks never disagree; fall back to the band
+  // numbers only when orpColor is absent.
+  let orpState = $derived(clBand != null ? bandToChemState(clBand) : chemState(orpVal, 545, 550));
 
-  let openTip: 'ph' | 'orp' | null = $state(null);
+  // CL is the Spa Boy's own sanitizer band (SpaboyColor: 0 very low … 4 very
+  // high), inferred from ORP — there's no chlorine probe, so we show a band
+  // rather than a number, mirroring the Arctic app.
+  const CL_WORDS = ['Very low', 'Low', 'OK', 'High', 'Very high'];
+  function clWord(b: number | undefined): string {
+    return b == null ? '—' : (CL_WORDS[b] ?? '—');
+  }
+  function clColor(b: number | undefined): string {
+    if (b == null) return 'var(--paper-mute)';
+    if (b === 2) return 'var(--moss)';
+    if (b === 1 || b === 3) return 'var(--amber)';
+    return 'var(--rust)';
+  }
+  function clSeverity(b: number | undefined): string {
+    if (b == null) return '—';
+    if (b === 2) return 'in range';
+    if (b === 1 || b === 3) return 'borderline';
+    return 'out of range';
+  }
 
-  function toggleTip(which: 'ph' | 'orp', e: Event) {
+  let openTip: 'ph' | 'orp' | 'cl' | null = $state(null);
+
+  function toggleTip(which: 'ph' | 'orp' | 'cl', e: Event) {
     e.stopPropagation();
     openTip = openTip === which ? null : which;
   }
@@ -50,7 +82,7 @@
 
 <svelte:window onclick={maybeDismiss} onkeydown={onKey} />
 
-<section class="card anim-rise" style="animation-delay: 320ms;">
+<section class="card anim-rise" style="animation-delay: 240ms;">
   <div class="head">
     <span class="head-label">Water chemistry</span>
     <span class="src">Spa Boy</span>
@@ -94,7 +126,26 @@
         <span class="state-dot" style="background: {stateColor(orpState)};"></span>
         {stateWord(orpState)}
       </div>
-      <div class="block-range">600 — 800</div>
+      <div class="block-range">545 — 550</div>
+    </div>
+
+    <div class="block">
+      <div class="block-label">
+        <span>CL</span>
+        <button
+          type="button"
+          class="info"
+          aria-label="What is CL?"
+          aria-expanded={openTip === 'cl'}
+          onclick={(e) => toggleTip('cl', e)}
+        >i</button>
+      </div>
+      <div class="block-value band" style="color: {clColor(clBand)};">{clWord(clBand)}</div>
+      <div class="block-state" style="color: {clColor(clBand)};">
+        <span class="state-dot" style="background: {clColor(clBand)};"></span>
+        {clSeverity(clBand)}
+      </div>
+      <div class="block-range">from ORP</div>
     </div>
   </div>
 
@@ -156,11 +207,11 @@
   {#if openTip === 'orp'}
     <div class="chem-tooltip" role="tooltip">
       <h3>ORP — the water's sanitizing power</h3>
-      <div class="tip-range">target 600 — 800 mV</div>
+      <div class="tip-range">target 545 — 550 mV</div>
       <p>
         Oxidation-Reduction Potential, in millivolts. It's an indirect measure of how strongly the
         water can sanitize — higher means more capacity to kill bacteria and break down organics.
-        Below 600 mV, the sanitizer isn't pulling its weight.
+        Below the ~545 mV target band, the sanitizer isn't pulling its weight.
       </p>
 
       <div class="tip-heading">If low, in order</div>
@@ -196,6 +247,60 @@
       </div>
     </div>
   {/if}
+
+  {#if openTip === 'cl'}
+    <div class="chem-tooltip" role="tooltip">
+      <h3>CL — chlorine / sanitizer band</h3>
+      <div class="tip-range">very low · low · ok · high · very high</div>
+      <p>
+        The Spa Boy has no direct chlorine probe — it rates sanitizer as a band, inferred from the
+        ORP reading. So CL tracks ORP: when ORP sits in its target window, CL reads OK.
+      </p>
+
+      {#if clBand != null && clBand < 2}
+        <div class="tip-heading">If low</div>
+        <ol>
+          <li>
+            <div>
+              <b>Drop pH toward 7.4</b>
+              <span>Sanitizer effectiveness falls sharply above pH 7.6 — usually the dominant cause. Fix here first.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Check salt, then boost</b>
+              <span>Spa Boy needs ~1500–2000 ppm salt to produce sanitizer. If salt is fine, run a boost cycle (or MPS shock if you're hosting tonight).</span>
+            </div>
+          </li>
+        </ol>
+      {:else if clBand != null && clBand > 2}
+        <div class="tip-heading">If high</div>
+        <ol>
+          <li>
+            <div>
+              <b>Stop any boost / over-production</b>
+              <span>Cancel boost mode and let production settle back to the normal band over a cycle or two.</span>
+            </div>
+          </li>
+          <li>
+            <div>
+              <b>Wait before soaking</b>
+              <span>Strongly over-sanitized water can irritate skin and eyes. Let it come down before heavy use.</span>
+            </div>
+          </li>
+        </ol>
+      {:else}
+        <div class="tip-heading">In range</div>
+        <p style="margin-bottom:0; color:var(--paper-soft);">
+          Sanitizer sitting in the healthy band. Nothing to do — recheck after heavy bather use.
+        </p>
+      {/if}
+
+      <div class="tip-footer">
+        Always trust your physical test kit + Arctic's published thresholds over generic advice.
+      </div>
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -221,8 +326,8 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 22px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
   }
   .block-label {
     display: flex;
@@ -273,6 +378,14 @@
     font-size: 0.9rem;
     color: var(--paper-mute);
     margin-left: 6px;
+  }
+  /* CL shows a word ("Very high"), not a number — smaller so it fits the
+     narrower three-up column and can wrap to two lines if needed. */
+  .block-value.band {
+    font-size: 1.45rem;
+    font-variation-settings: 'opsz' 40, 'wght' 340, 'SOFT' 60;
+    line-height: 1.08;
+    align-items: flex-start;
   }
   .block-state {
     display: flex;

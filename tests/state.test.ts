@@ -35,10 +35,10 @@ describe('state store — real payload shapes', () => {
     expect(s.snapshot().blower).toBe(false);
   });
 
-  it('normalises telemetry/spaboy: ph is centi-pH (divide by 100), orp is mV integer', () => {
+  it('normalises telemetry/spaboy: ph is centi-pH (divide by 100), orp is mV integer, orpColor is the CL band', () => {
     const s = createStateStore('uuid-1');
     s.ingest(ev('arctic/spa/uuid-1/telemetry/spaboy', TELEMETRY_SPABOY));
-    expect(s.snapshot().chemistry).toEqual({ ph: 7.67, orp: 587 });
+    expect(s.snapshot().chemistry).toEqual({ ph: 7.67, orp: 587, clBand: 2 });
   });
 
   it('normalises telemetry/errors: collects truthy named-boolean keys', () => {

@@ -22,7 +22,7 @@
   ]);
 </script>
 
-<section class="card anim-rise" style="animation-delay: 240ms;">
+<section class="card anim-rise" style="animation-delay: 320ms;">
   <div class="head">
     <span class="head-label">Accessories</span>
     <span class="count">{items.filter((a) => a.on).length} / {items.length} on</span>

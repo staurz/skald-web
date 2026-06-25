@@ -33,7 +33,10 @@ export type SpaState = {
   blower?: boolean;
   lights?: boolean;
   errors?: string[];
-  chemistry?: { ph?: number; chlorine?: number; orp?: number };
+  // clBand is the Spa Boy's own sanitizer/chlorine band (SpaboyColor index:
+  // 0 very low … 2 ok … 4 very high), inferred from ORP — there is no separate
+  // chlorine probe. Surfaced as "CL" to match the Arctic app.
+  chemistry?: { ph?: number; orp?: number; clBand?: number };
   filterCycle?: { active: boolean; nextStartTs?: number };
   rfidTag?: string;
 };
