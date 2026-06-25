@@ -115,11 +115,6 @@
     });
   }
 
-  // A task is expandable if it has detail to show (a description or a checklist).
-  function hasDetail(t: MaintenanceTask): boolean {
-    return !!(t.description && t.description.trim()) || t.subTasks.length > 0;
-  }
-
   async function load() {
     const r = await fetch('/api/maintenance/tasks');
     if (r.ok) tasks = (await r.json()).tasks;
@@ -290,22 +285,21 @@
           <li class={group(t)} animate:flip={{ duration: FLIP_MS }}>
             <div class="row">
               {#if section.key === 'todo'}<span class="drag" use:dragHandle aria-label="Drag to reorder" title="Drag to reorder">⠿</span>{/if}
-              {#if hasDetail(t)}
-                <button class="check chev" title="Show details" onclick={() => toggleExpand(t.id)} aria-label="Show details" aria-expanded={!!expanded[t.id]}>{expanded[t.id] ? '▾' : '▸'}</button>
-              {:else}
-                <button class="big-check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete"></button>
-              {/if}
-              <span class="title">{t.title}</span>
-              {#if t.subTasks.length > 0}<span class="count">{progress(t)}</span>{/if}
-              {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
-              {#if t.subTasks.length === 0 && hasDetail(t)}
-                <button class="big-check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete"></button>
-              {/if}
+              <button class="big-check" title="Complete" onclick={() => complete(t.id)} aria-label="Complete"></button>
+              <div class="body">
+                <button class="title titlebtn" onclick={() => toggleExpand(t.id)} aria-expanded={!!expanded[t.id]}>{t.title}</button>
+                {#if t.subTasks.length > 0 || t.dueTs !== null}
+                  <div class="meta">
+                    {#if t.subTasks.length > 0}<span class="count">{progress(t)}</span>{/if}
+                    {#if t.dueTs !== null}<span class="due">{fmtDue(t.dueTs)}</span>{/if}
+                  </div>
+                {/if}
+              </div>
               <button class="edit" title="Edit" onclick={() => startEdit(t)} aria-label="Edit">✎</button>
-              <button class="del" title="Delete" onclick={() => remove(t.id)} aria-label="Delete">✕</button>
+              <button class="check chev" title="Details" onclick={() => toggleExpand(t.id)} aria-label="Details" aria-expanded={!!expanded[t.id]}>{expanded[t.id] ? '▾' : '▸'}</button>
             </div>
 
-            {#if expanded[t.id] && hasDetail(t)}
+            {#if expanded[t.id]}
               <div class="detail">
                 {#if t.description}
                   <div class="desc">
@@ -333,6 +327,10 @@
                     </form>
                   </div>
                 {/if}
+
+                <div class="detail-actions">
+                  <button class="danger" onclick={() => remove(t.id)} aria-label="Delete task">Delete task</button>
+                </div>
               </div>
             {/if}
           </li>
@@ -412,6 +410,18 @@
     border: 1px solid var(--paper-faint);
   }
 
+  /* Phone: the wrap-flex row jumbles on narrow widths. Give the title its own
+     line, let the recurrence controls share a row, and make the actions full
+     width with a taller, thumb-friendly tap target. */
+  @media (max-width: 540px) {
+    .add { gap: 10px; }
+    .add input:not([type]) { flex-basis: 100%; }
+    .add select,
+    .add input[type='date'],
+    .add input[type='number'] { flex: 1 1 8rem; }
+    .add button { flex-basis: 100%; padding: 13px 18px; }
+  }
+
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
   li {
     display: flex;
@@ -425,26 +435,45 @@
   }
   li.overdue { border-left: 3px solid var(--rust); }
   .row { display: flex; align-items: center; gap: 10px; }
-  .title { flex: 1; font-family: var(--display); font-size: 1.02rem; color: var(--paper); }
+  /* Title + meta share a shrinkable column so they never fight the action
+     buttons for horizontal room (which would squeeze the title to one
+     character per line and push the page wider than a phone). */
+  .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .title { min-width: 0; overflow-wrap: break-word; font-family: var(--display); font-size: 1.02rem; color: var(--paper); }
+  .titlebtn { text-align: left; border: none; background: none; padding: 0; cursor: pointer; width: 100%; }
+  .meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
   .count { font-family: var(--mono); font-size: 0.72rem; color: var(--copper); letter-spacing: 0.08em; }
   .due { font-family: var(--mono); font-size: 0.66rem; color: var(--paper-mute); letter-spacing: 0.08em; }
   .check, .del, .edit {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: none;
+    border-radius: 10px;
     background: none;
     cursor: pointer;
-    font-size: 1.05rem;
+    font-size: 1.2rem;
     color: var(--paper-soft);
-    transition: color 0.25s;
+    transition: color 0.2s, background 0.2s;
+    /* don't let a press select/zoom the glyph on touch */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
   }
   .big-check {
     flex-shrink: 0;
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     border-radius: 999px;
     border: 2px solid var(--paper-faint);
     background: transparent;
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   .big-check:hover {
     border-color: var(--moss);
@@ -486,14 +515,18 @@
     touch-action: none; /* let the library own the drag gesture on touch */
   }
   .drag:active { cursor: grabbing; }
-  .check:hover { color: var(--moss); }
-  .edit:hover { color: var(--copper); }
-  .del:hover { color: var(--rust); }
+  .check:hover { color: var(--moss); background: rgba(138, 166, 141, 0.16); }
+  .edit:hover { color: var(--copper); background: rgba(184, 115, 51, 0.14); }
+  .del:hover { color: var(--rust); background: rgba(160, 60, 45, 0.16); }
+  /* Confirm the target under the finger before the click commits. */
+  .check:active, .edit:active, .del:active { transform: scale(0.92); }
   .empty { color: var(--paper-mute); }
 
   .chev { font-size: 0.9rem; }
 
-  .detail { margin: 2px 0 0 26px; display: flex; flex-direction: column; gap: 12px; }
+  /* Indent the detail block to sit under the title, past the 32px complete
+     circle plus the row's 10px gap. */
+  .detail { margin: 2px 0 0 42px; display: flex; flex-direction: column; gap: 12px; }
   .desc { display: flex; flex-direction: column; gap: 7px; }
   .dl {
     display: grid;
@@ -516,7 +549,7 @@
   .item { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; color: var(--paper); }
   .item input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--copper); flex-shrink: 0; }
   .item span.done { text-decoration: line-through; color: var(--paper-mute); }
-  .del.small { font-size: 0.85rem; margin-left: auto; color: var(--paper-mute); }
+  .del.small { width: 26px; height: 26px; font-size: 0.85rem; margin-left: auto; color: var(--paper-mute); }
   .add-item input {
     width: 100%;
     padding: 8px 12px;
@@ -528,4 +561,25 @@
   }
   .add-item input::placeholder { color: var(--paper-mute); }
   .add-item input:focus { outline: none; border-color: var(--copper); }
+
+  /* Delete lives here, out of the always-visible row, so it can't be hit by
+     accident; aligned right and understated until hovered. */
+  .detail-actions { display: flex; justify-content: flex-end; padding-top: 2px; }
+  .danger {
+    border: 1px solid var(--paper-faint);
+    background: none;
+    color: var(--rust);
+    font-family: var(--mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .danger:hover { border-color: var(--rust); background: rgba(160, 60, 45, 0.14); }
+  .danger:active { transform: scale(0.96); }
 </style>
