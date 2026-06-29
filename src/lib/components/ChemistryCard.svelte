@@ -82,7 +82,7 @@
 
 <svelte:window onclick={maybeDismiss} onkeydown={onKey} />
 
-<section class="card anim-rise" style="animation-delay: 240ms;">
+<section class="chem anim-rise" style="animation-delay: 240ms;">
   <div class="head">
     <span class="head-label">Water chemistry</span>
     <span class="src">Spa Boy</span>
@@ -304,6 +304,12 @@
 </section>
 
 <style>
+  /* Flat metrics strip (no card chrome). Horizontal padding matches the card
+     content below it so the labels line up. */
+  .chem {
+    position: relative;
+    padding: 2px 28px 4px;
+  }
   .head {
     display: flex;
     justify-content: space-between;
@@ -329,9 +335,13 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
   }
+  .block {
+    text-align: center;
+  }
   .block-label {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     font-family: var(--font-mono);
     font-size: 0.68rem;
@@ -372,6 +382,7 @@
     letter-spacing: -0.02em;
     display: flex;
     align-items: baseline;
+    justify-content: center;
   }
   .unit {
     font-variation-settings: 'opsz' 40, 'wght' 350, 'SOFT' 50;
@@ -390,6 +401,7 @@
   .block-state {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     margin-top: 10px;
     font-family: var(--font-display);

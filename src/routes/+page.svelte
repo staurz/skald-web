@@ -28,10 +28,23 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 18px;
+    /* Size each card to its own content; otherwise the shorter chemistry card
+       stretches to match the taller accessory grid and gains dead space. */
+    align-items: start;
   }
   @media (min-width: 768px) {
+    /* Desktop: gather the hero + cards into one contained, centred column
+       (chemistry stacked over accessories) instead of stranding a small
+       cluster at the top of a tall, mostly-empty page. */
+    .now {
+      max-width: 460px;
+      width: 100%;
+      margin-inline: auto;
+      min-height: calc(100vh - 230px);
+      justify-content: center;
+    }
+    /* .grid stays a single column, so the cards stack vertically. */
     .grid {
-      grid-template-columns: 1fr 1fr;
       gap: 22px;
     }
   }

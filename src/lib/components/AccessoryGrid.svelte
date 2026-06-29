@@ -83,6 +83,13 @@
     grid-template-columns: 1fr 1fr;
     gap: 10px;
   }
+  /* Desktop: three tiles per row so the card is shorter and sits closer in
+     height to the chemistry card beside it. */
+  @media (min-width: 768px) {
+    .grid {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+  }
   .tile {
     position: relative;
     text-align: left;
