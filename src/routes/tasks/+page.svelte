@@ -3,6 +3,7 @@
   import { dragHandleZone, dragHandle } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import type { MaintenanceTask, TaskInput, RecurrenceKind, IntervalUnit, CompletionSnapshot } from '$lib/server/maintenance-types';
+  import { parseTaskDescription, taskDescriptionFieldsFromText, taskDescriptionFromFields } from '$lib/util/task-description';
   // SubTask type is carried inside MaintenanceTask.subTasks; no separate import needed.
 
   let tasks = $state<MaintenanceTask[]>([]);
@@ -13,6 +14,9 @@
   let intervalUnit = $state<IntervalUnit>('month');
   let annualMonth = $state(10);
   let annualDay = $state(15);
+  let descHva = $state('');
+  let descHvorfor = $state('');
+  let descHvordan = $state('');
   let editingId = $state<string | null>(null);
   let expanded = $state<Record<string, boolean>>({});
   let newItem = $state<Record<string, string>>({});
@@ -100,21 +104,6 @@
     return `${t.subTasks.filter((s) => s.done).length}/${t.subTasks.length}`;
   }
 
-  // Split a "Hva:/Hvorfor:/Hvordan:" description into labelled parts. Lines
-  // without a recognised label render as plain text.
-  type DescPart = { label: string; text: string };
-  const DESC_LABELS = ['Hva', 'Hvorfor', 'Hvordan'];
-  function parseDesc(d: string | null): DescPart[] {
-    if (!d) return [];
-    return d.split('\n').map((line) => {
-      const i = line.indexOf(':');
-      const label = i > 0 ? line.slice(0, i).trim() : '';
-      return DESC_LABELS.includes(label)
-        ? { label, text: line.slice(i + 1).trim() }
-        : { label: '', text: line };
-    });
-  }
-
   async function load() {
     const r = await fetch('/api/maintenance/tasks');
     if (r.ok) tasks = (await r.json()).tasks;
@@ -123,7 +112,11 @@
   onMount(load);
 
   function buildInput(): TaskInput {
-    const base: TaskInput = { title, recurrenceKind: kind };
+    const base: TaskInput = {
+      title,
+      recurrenceKind: kind,
+      description: taskDescriptionFromFields({ hva: descHva, hvorfor: descHvorfor, hvordan: descHvordan }),
+    };
     if (kind === 'once' && firstDueDate) base.firstDueDate = firstDueDate;
     if (kind === 'interval') {
       base.intervalValue = intervalValue;
@@ -146,6 +139,9 @@
     intervalUnit = 'month';
     annualMonth = 10;
     annualDay = 15;
+    descHva = '';
+    descHvorfor = '';
+    descHvordan = '';
   }
 
   function startEdit(t: MaintenanceTask) {
@@ -156,6 +152,10 @@
     intervalUnit = t.intervalUnit ?? 'month';
     annualMonth = t.annualMonth ?? 10;
     annualDay = t.annualDay ?? 15;
+    const description = taskDescriptionFieldsFromText(t.description);
+    descHva = description.hva;
+    descHvorfor = description.hvorfor;
+    descHvordan = description.hvordan;
     // Prefill the date field from the stored due timestamp (YYYY-MM-DD).
     firstDueDate = t.dueTs === null ? '' : new Date(t.dueTs).toISOString().slice(0, 10);
   }
@@ -203,7 +203,7 @@
   let sections = $state<{ key: 'overdue' | 'soon' | 'upcoming' | 'todo'; label: string; items: MaintenanceTask[] }[]>([]);
 
   function rebuildSections() {
-    sections = (['overdue', 'soon', 'upcoming', 'todo'] as const)
+    sections = (['overdue', 'soon', 'todo', 'upcoming'] as const)
       .map((g) => {
         const items = tasks.filter((t) => group(t) === g);
         // Dated sections are ordered by due date (soonest first). The "No date"
@@ -240,37 +240,57 @@
   <h1>Tasks</h1>
 
   <form class="add" onsubmit={save}>
-    <input placeholder="New task…" bind:value={title} aria-label="Task title" />
-    <select bind:value={kind} aria-label="Recurrence">
-      <option value="once">One-off / todo</option>
-      <option value="interval">Repeat every…</option>
-      <option value="annual">Every year</option>
-    </select>
+    <div class="add-row">
+      <input placeholder="New task…" bind:value={title} aria-label="Task title" />
+      <select bind:value={kind} aria-label="Recurrence">
+        <option value="once">One-off / todo</option>
+        <option value="interval">Repeat every…</option>
+        <option value="annual">Every year</option>
+      </select>
 
-    {#if kind === 'once'}
-      <input type="date" bind:value={firstDueDate} aria-label="Due date (optional)" />
-    {:else if kind === 'interval'}
-      <input type="number" min="1" bind:value={intervalValue} aria-label="Interval value" />
-      <select bind:value={intervalUnit} aria-label="Interval unit">
-        <option value="day">days</option>
-        <option value="week">weeks</option>
-        <option value="month">months</option>
-      </select>
-      <input type="date" bind:value={firstDueDate} aria-label="First due date (optional)" />
-    {:else}
-      <span class="when">Every year on</span>
-      <select class="date-part" bind:value={annualMonth} aria-label="Month">
-        {#each MONTHS as name, i}<option value={i + 1}>{name}</option>{/each}
-      </select>
-      <select class="date-part" bind:value={annualDay} aria-label="Day">
-        {#each Array(daysInMonth) as _, i}<option value={i + 1}>{i + 1}</option>{/each}
-      </select>
-    {/if}
+      {#if kind === 'once'}
+        <input type="date" bind:value={firstDueDate} aria-label="Due date (optional)" />
+      {:else if kind === 'interval'}
+        <input type="number" min="1" bind:value={intervalValue} aria-label="Interval value" />
+        <select bind:value={intervalUnit} aria-label="Interval unit">
+          <option value="day">days</option>
+          <option value="week">weeks</option>
+          <option value="month">months</option>
+        </select>
+        <input type="date" bind:value={firstDueDate} aria-label="First due date (optional)" />
+      {:else}
+        <span class="when">Every year on</span>
+        <select class="date-part" bind:value={annualMonth} aria-label="Month">
+          {#each MONTHS as name, i}<option value={i + 1}>{name}</option>{/each}
+        </select>
+        <select class="date-part" bind:value={annualDay} aria-label="Day">
+          {#each Array(daysInMonth) as _, i}<option value={i + 1}>{i + 1}</option>{/each}
+        </select>
+      {/if}
 
-    <button type="submit">{editingId ? 'Save' : 'Add'}</button>
-    {#if editingId}
-      <button type="button" class="cancel" onclick={resetForm}>Cancel</button>
-    {/if}
+    </div>
+
+    <div class="detail-fields">
+      <label class="detail-field">
+        <span>Hva</span>
+        <textarea bind:value={descHva} rows="3" aria-label="Hva"></textarea>
+      </label>
+      <label class="detail-field">
+        <span>Hvorfor</span>
+        <textarea bind:value={descHvorfor} rows="3" aria-label="Hvorfor"></textarea>
+      </label>
+      <label class="detail-field">
+        <span>Hvordan</span>
+        <textarea bind:value={descHvordan} rows="3" aria-label="Hvordan"></textarea>
+      </label>
+    </div>
+
+    <div class="add-actions">
+      <button type="submit">{editingId ? 'Save' : 'Add'}</button>
+      {#if editingId}
+        <button type="button" class="cancel" onclick={resetForm}>Cancel</button>
+      {/if}
+    </div>
   </form>
 
   {#each sections as section (section.key)}
@@ -303,7 +323,7 @@
               <div class="detail">
                 {#if t.description}
                   <div class="desc">
-                    {#each parseDesc(t.description) as part}
+                    {#each parseTaskDescription(t.description) as part}
                       {#if part.label}
                         <div class="dl"><span class="dt">{part.label}</span><span class="dd">{part.text}</span></div>
                       {:else}
@@ -369,14 +389,42 @@
     margin: 0 0 10px;
   }
 
-  .add { display: flex; flex-wrap: wrap; gap: 8px; }
-  .add input, .add select {
+  .add { display: flex; flex-wrap: wrap; gap: 10px; }
+  .add-row,
+  .add-actions {
+    flex: 1 1 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .detail-fields {
+    flex: 1 1 100%;
+    display: grid;
+    gap: 8px;
+  }
+  .detail-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .detail-field span {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--paper-mute);
+  }
+  .add input, .add select, .add textarea {
     padding: 10px 12px;
     border-radius: var(--r-sm);
     border: 1px solid var(--paper-faint);
     background: rgba(243, 237, 224, 0.06);
     color: var(--paper);
     font: inherit;
+  }
+  .add textarea {
+    min-height: 96px;
+    resize: vertical;
   }
   .when {
     align-self: center;
@@ -386,12 +434,12 @@
     text-transform: uppercase;
     color: var(--paper-mute);
   }
-  .add input::placeholder { color: var(--paper-mute); }
-  .add input:focus, .add select:focus { outline: none; border-color: var(--copper); }
+  .add input::placeholder, .add textarea::placeholder { color: var(--paper-mute); }
+  .add input:focus, .add select:focus, .add textarea:focus { outline: none; border-color: var(--copper); }
   /* Native dropdown list: the popped-open options use their own background,
      so give them a solid dark surface + cream text for readable contrast. */
   .add select option { background: var(--ink-2); color: var(--paper); }
-  .add input:not([type]) { flex: 1 1 160px; }
+  .add-row input:not([type]) { flex: 1 1 160px; }
   .add button {
     padding: 10px 18px;
     border-radius: 999px;
@@ -410,16 +458,82 @@
     border: 1px solid var(--paper-faint);
   }
 
+  @media (min-width: 900px) {
+    .add {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+      grid-template-areas:
+        'primary details'
+        'actions details';
+      gap: 18px 24px;
+      padding: 24px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--paper-line);
+      background: linear-gradient(180deg, rgba(26, 43, 68, 0.4), rgba(18, 32, 53, 0.22));
+      box-shadow: var(--shadow-1);
+    }
+    .add-row {
+      grid-area: primary;
+      align-content: start;
+      gap: 10px;
+    }
+    .add-row input:not([type]) {
+      flex-basis: 100%;
+    }
+    .add-row select,
+    .add-row input[type='date'],
+    .add-row input[type='number'] {
+      flex: 1 1 10rem;
+      min-width: 0;
+    }
+    .detail-fields {
+      grid-area: details;
+      align-content: start;
+      gap: 12px;
+      padding-left: 22px;
+      border-left: 1px solid var(--paper-line);
+    }
+    .detail-field {
+      padding: 12px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(243, 237, 224, 0.08);
+      background: rgba(10, 19, 32, 0.16);
+    }
+    .detail-field:focus-within {
+      border-color: var(--copper-dim);
+      background: rgba(10, 19, 32, 0.24);
+    }
+    .detail-field textarea {
+      min-height: 68px;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      resize: none;
+    }
+    .detail-field textarea:focus {
+      border: none;
+      outline: none;
+    }
+    .add-actions {
+      grid-area: actions;
+      align-self: end;
+      justify-content: flex-start;
+      gap: 10px;
+    }
+  }
+
   /* Phone: the wrap-flex row jumbles on narrow widths. Give the title its own
      line, let the recurrence controls share a row, and make the actions full
      width with a taller, thumb-friendly tap target. */
   @media (max-width: 540px) {
     .add { gap: 10px; }
-    .add input:not([type]) { flex-basis: 100%; }
-    .add select,
-    .add input[type='date'],
-    .add input[type='number'] { flex: 1 1 8rem; }
-    .add button { flex-basis: 100%; padding: 13px 18px; }
+    .add-row input:not([type]) { flex-basis: 100%; }
+    .add-row select,
+    .add-row input[type='date'],
+    .add-row input[type='number'] { flex: 1 1 8rem; }
+    .detail-fields { grid-template-columns: 1fr; }
+    .add-actions button { flex-basis: 100%; padding: 13px 18px; }
   }
 
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
